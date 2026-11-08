@@ -90,7 +90,7 @@ extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
 	v.PluginName(Plugin::NAME);
 	v.AuthorName("Ersh");
 	v.UsesAddressLibrary();
-	v.CompatibleVersions({ SKSE::RUNTIME_SSE_1_6_1170 });
+	v.CompatibleVersions({ SKSE::RUNTIME_SSE_1_5_97, SKSE::RUNTIME_SSE_1_6_1170 });
 	v.UsesUpdatedStructs();
 
 	return v;

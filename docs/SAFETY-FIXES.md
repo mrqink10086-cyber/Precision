@@ -2,6 +2,8 @@
 
 本轮以 `8fb061968e14724e144be3008698e4083fbf0e67` 为修复基线，使用提供的 `CommonLibSSE-NG-ng` 15.7.3 源码。未修改 NG 库本身，保留 Precision 2.0.6 版本及 V1–V5 的公开虚函数布局。
 
+同一 DLL 保留 SE 1.5.97 与 AE 1.6.1170：构建启用 `ENABLE_SKYRIM_SE=ON`、`ENABLE_SKYRIM_AE=ON`，旧版 Query 允许 1.5.97，版本导出的兼容清单显式列出两者。VR 未启用。新增 `bhkWorld::GetWorld1()` 的 slot `0x27` 已在两版实际可执行文件核对，均为 `mov rax,[rcx+0x10]; ret`，与 NG 的 `referencedObject` 声明一致；数据和文件 SHA256 见 `audit/world-vtable.json`。原新增命中 hook 和 cinfo 槽位核对见 `audit/hit-hook.json`。
+
 ## 任务与游戏对象
 
 `ApplyHitImpulse` 同时验证 handle 的解析结果与刚体参数；延迟执行时确认刚体仍属于当前引用的 3D 树。handle 的非零值不再被当作解析成功的依据。`ForEachRagdollDriver` 与刚体版 clone 查询也处理空输入。

@@ -1,0 +1,18 @@
+[
+  {
+    "runtime": "1.5.97",
+    "executable_sha256": "de92095a18513fcaffe5a86fd72879d3350c61cdcdb8500b7d31df2bae9579cd",
+    "vtable_id": 288902,
+    "slot": "0x27",
+    "target_rva": "0xda6b60",
+    "bytes": "488b4110c3cccccccccccccccccccccc"
+  },
+  {
+    "runtime": "1.6.1170",
+    "executable_sha256": "80c1ea737d33c6bfac09b101b8d77ab0f9f6630128c3ed052f9d945bed54e7e4",
+    "vtable_id": 238918,
+    "slot": "0x27",
+    "target_rva": "0xe85b50",
+    "bytes": "488b4110c3cccccccccccccccccccccc"
+  }
+]
