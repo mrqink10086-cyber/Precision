@@ -67,6 +67,12 @@ if(PRECISION_BUILD_TESTS)
 	add_test(NAME precision_config_tests COMMAND precision_config_tests)
 	set_tests_properties(precision_config_tests PROPERTIES TIMEOUT 30)
 
+	add_executable(precision_camera_filter_tests tests/camera_filter_tests.cpp)
+	target_compile_features(precision_camera_filter_tests PRIVATE cxx_std_20)
+	target_include_directories(precision_camera_filter_tests PRIVATE src)
+	add_test(NAME precision_camera_filter_tests COMMAND precision_camera_filter_tests)
+	set_tests_properties(precision_camera_filter_tests PROPERTIES TIMEOUT 30)
+
 	add_executable(precision_runtime_bench EXCLUDE_FROM_ALL tests/runtime_bench.cpp)
 	target_compile_features(precision_runtime_bench PRIVATE cxx_std_20)
 	target_include_directories(precision_runtime_bench PRIVATE src)

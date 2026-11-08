@@ -1912,6 +1912,10 @@ namespace Hooks
 			return CollisionFilterComparisonResult::Continue;
 		}
 
+		if (CollisionFilter::IsCameraPrecisionPair(a_filterInfoA, a_filterInfoB)) {
+			return CollisionFilterComparisonResult::Ignore;
+		}
+
 		CollisionLayer layerA = static_cast<CollisionLayer>(a_filterInfoA & 0x7f);
 		CollisionLayer layerB = static_cast<CollisionLayer>(a_filterInfoB & 0x7f);
 

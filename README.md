@@ -4,6 +4,8 @@
 
 安装时只覆盖原 Precision 的 DLL，保留原模组资源，并使用对应游戏版本的 SKSE 与 Address Library。合并细节和构建方式见 [docs/MERGE.md](docs/MERGE.md)；调度、回调、游戏指针与配置修复及验证范围见 [docs/SAFETY-FIXES.md](docs/SAFETY-FIXES.md)。尚未进行游戏内测试。
 
+最新摄像机修复版显式隔离摄像机与 Precision 碰撞层，覆盖零分组绕过默认掩码的情况，减少近距离镜头被挥扫碰撞体触发避障的问题。改动、回调优先级及验证范围见 [docs/CAMERA-COLLISION.md](docs/CAMERA-COLLISION.md)。
+
 Quite a bit of Havok-related code comes from [PLANCK](https://github.com/adamhynek/activeragdoll) and [HIGGS](https://github.com/adamhynek/higgs)
 
 The debug drawing functionality is hastily put together from [SmoothCam](https://github.com/mwilsnd/SkyrimSE-SmoothCam)'s code that draws the arrow trajectory. I know it's horribly hacked together but it's just a debug feature, I didn't have time or a real reason to refactor it yet.
