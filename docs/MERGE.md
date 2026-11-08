@@ -37,6 +37,24 @@ glm 固定为原 submodule 提交 `586a402397dd35d66d7a079049856d1e2cbab300`，t
 
 尚未启动游戏验证。进入 1.6.1170 后，应确认 SKSE 成功加载 Precision、MSL 日志取得 V5，并测试普通命中、带 MSL 注释的特殊硬直、多目标、击杀与 hitstop，以及读档后表现。
 
+## 构建记录
+
+本次使用 MSVC 19.44、Windows SDK 10.0.26100.0、x64 Release 和动态 MSVC CRT。依赖包通过已有的 vcpkg 安装前缀提供；下列本地路径可替换为相应依赖的安装或源码目录。
+
+```powershell
+cmake -S . -B build/ng-merge -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+  -DCMAKE_PREFIX_PATH=E:/source/repos/valhallaCombat/build/vcpkg_installed/x64-windows-static-md `
+  -DCOMMONLIBSSE_NG_PATH=E:/source/repos/CommonLibSSE-NG-ng `
+  -DFETCHCONTENT_SOURCE_DIR_HDE64=E:/source/repos/valhallaCombat/build/_deps/hde64-src `
+  -DFETCHCONTENT_SOURCE_DIR_GLM=E:/source/repos/Precision-main/build/deps/glm `
+  -DFETCHCONTENT_SOURCE_DIR_TOMLPLUSPLUS=E:/source/repos/Precision-main/build/deps/tomlplusplus `
+  -DCOMMONLIB_ENABLE_IPO=OFF
+cmake --build build/ng-merge --config Release --target Precision --parallel 12
+```
+
+构建与链接通过。`tools/check_api.py` 对比固定版本的标准版和 fork 头文件，确认 13 个标准声明、回调类型别名及 V5 虚函数声明一致；仅允许 fork 新增的无布局影响默认构造函数。新增命中调用点和 cinfo 基类虚表槽位的实际二进制记录见 `docs/audit/hit-hook.json`。验证没有覆盖游戏运行中的 Havok 行为。
+
 ## 来源
 
 - [标准 2.0.6](https://github.com/ersh1/Precision/tree/9ef45e0d8d9e3cf8b2df444f05142c1e7bf41cd4)
