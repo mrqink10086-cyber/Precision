@@ -50,10 +50,16 @@ AttackTrail::AttackTrail(RE::NiNode* a_node, RE::ActorHandle a_actorHandle, RE::
 		}
 
 		trailParticle = RE::NiPointer<RE::BSTempEffectParticle>(RE::BSTempEffectParticle::Spawn(a_cell, 10.f, trailMeshPath.data(), collisionParentNode->world.rotate, collisionParentNode->world.translate, 1.f, 7, nullptr));
+		if (!trailParticle) {
+			bActive = false;
+			return;
+		}
 
 		float length = 0.f;
-		if (!a_bTrailUseTrueLength) {
-			weaponNode = RE::NiPointer<RE::NiNode>(static_cast<RE::NiNode*>(a_node->parent->children[0].get()));
+		if (!a_bTrailUseTrueLength && collisionParentNode->children.size() != 0) {
+			if (const auto& weaponObject = collisionParentNode->children[0]) {
+				weaponNode = RE::NiPointer<RE::NiNode>(weaponObject->AsNode());
+			}
 			if (weaponNode && weaponNode != collisionNode) {
 				if (a_weaponItem && a_weaponItem->object) {
 					if (auto equippedWeapon = a_weaponItem->object->As<RE::TESObjectWEAP>()) {
@@ -72,7 +78,11 @@ AttackTrail::AttackTrail(RE::NiNode* a_node, RE::ActorHandle a_actorHandle, RE::
 
 		if (length == 0.f) {
 			Utils::Capsule capsule;
-			Utils::GetCapsuleParams(a_node, capsule);
+			if (!Utils::GetCapsuleParams(a_node, capsule)) {
+				bActive = false;
+				trailParticle->age += trailParticle->lifetime;
+				return;
+			}
 
 			length = capsule.a.GetDistance(capsule.b);
 			scale = fmax(length, capsule.radius) * 0.01f;
@@ -87,9 +97,20 @@ AttackTrail::AttackTrail(RE::NiNode* a_node, RE::ActorHandle a_actorHandle, RE::
 
 bool AttackTrail::Update(float a_deltaTime)
 {
+	const auto endTrail = [this]() {
+		bActive = false;
+		if (trailParticle) {
+			trailParticle->age += trailParticle->lifetime;
+		}
+		return false;
+	};
+
 	if (Settings::bDisplayTrails) {
 		if (!bActive) {
 			return false;
+		}
+		if (!collisionNode || !collisionParentNode || !trailParticle) {
+			return endTrail();
 		}
 
 		//a_deltaTime = PrecisionHandler::GetHitstop(actorHandle, a_deltaTime, false);
@@ -110,7 +131,7 @@ bool AttackTrail::Update(float a_deltaTime)
 		RE::NiTransform transform = collisionParentNode->world;
 		transform = transform * collisionNodeLocalTransform;
 		//transform.rotate = transform.rotate * weaponRotation;
-		trailHistory.emplace_back(transform);
+		trailHistory.Push(transform);
 
 		if (trailParticle && trailParticle->particleObject) {
 			if (auto particleObject = trailParticle->particleObject) {
@@ -137,12 +158,24 @@ bool AttackTrail::Update(float a_deltaTime)
 					bAppliedTrailColorSettings = true;
 				}
 
+				if (!particleObject->AsFadeNode()) {
+					return endTrail();
+				}
 				if (auto fadeNode = particleObject->AsFadeNode()) {
 					fadeNode->currentFade = 1.f;
 
+					if (fadeNode->children.empty()) {
+						return endTrail();
+					}
 					if (fadeNode->children.size() > 0) {
 						auto trailRoot = fadeNode->GetObjectByName("TrailRoot"sv);
+						if (!trailRoot) {
+							return endTrail();
+						}
 						auto trailRootNode = trailRoot->AsNode();
+						if (!trailRootNode || trailRootNode->children.empty()) {
+							return endTrail();
+						}
 						if (trailRootNode && !trailRootNode->children.empty()) {
 							if (trailHistory.size() >= 4) {
 								float segmentsToAdd = 0.f;
@@ -190,19 +223,19 @@ bool AttackTrail::Update(float a_deltaTime)
 
 										currentBoneIdx -= segmentsToMove;
 									}
-								}								
+								}
 
 								// add new segment(s)
 								if (segmentsToAdd > 0.f) {
-									auto p3_it = trailHistory.rbegin();
-									auto p2_it = p3_it + 1;
-									auto p1_it = p2_it + 1;
-									auto p0_it = p1_it + 1;
+									const auto& p3_transform = trailHistory.Newest(0);
+									const auto& p2_transform = trailHistory.Newest(1);
+									const auto& p1_transform = trailHistory.Newest(2);
+									const auto& p0_transform = trailHistory.Newest(3);
 
-									auto& p0 = p0_it->translate;
-									auto& p1 = p1_it->translate;
-									auto& p2 = p2_it->translate;
-									auto& p3 = p3_it->translate;
+									auto& p0 = p0_transform.translate;
+									auto& p1 = p1_transform.translate;
+									auto& p2 = p2_transform.translate;
+									auto& p3 = p3_transform.translate;
 
 									for (uint32_t i = 0; i < segmentsToAddTrunc; ++i) {
 										if (trailRootNode->children.size() > currentBoneIdx) {
@@ -210,10 +243,10 @@ bool AttackTrail::Update(float a_deltaTime)
 											if (segmentBone) {
 												float t = (i + 1.f) / segmentsToAdd;
 
-												RE::NiPoint3 p0end = p0 + (p0_it->rotate * forwardVector) * 50.f;
-												RE::NiPoint3 p1end = p1 + (p1_it->rotate * forwardVector) * 50.f;
-												RE::NiPoint3 p2end = p2 + (p2_it->rotate * forwardVector) * 50.f;
-												RE::NiPoint3 p3end = p3 + (p3_it->rotate * forwardVector) * 50.f;
+												RE::NiPoint3 p0end = p0 + (p0_transform.rotate * forwardVector) * 50.f;
+												RE::NiPoint3 p1end = p1 + (p1_transform.rotate * forwardVector) * 50.f;
+												RE::NiPoint3 p2end = p2 + (p2_transform.rotate * forwardVector) * 50.f;
+												RE::NiPoint3 p3end = p3 + (p3_transform.rotate * forwardVector) * 50.f;
 
 												RE::NiPoint3 interpolatedPos = Utils::CatmullRom(p0, p1, p2, p3, t);
 												RE::NiPoint3 interpolatedEnd = Utils::CatmullRom(p0end, p1end, p2end, p3end, t);
@@ -247,7 +280,7 @@ bool AttackTrail::Update(float a_deltaTime)
 
 							// move unused bones to the weapon pos
 							if (trailHistory.size() > 0 && currentBoneIdx < trailRootNode->children.size()) {
-								RE::NiTransform worldTransform = *(trailHistory.rbegin());
+								RE::NiTransform worldTransform = trailHistory.Newest();
 
 								RE::NiPoint3 end = worldTransform.translate + (worldTransform.rotate * forwardVector) * 50.f;
 								RE::NiPoint3 dir = end - worldTransform.translate;
@@ -258,7 +291,11 @@ bool AttackTrail::Update(float a_deltaTime)
 								worldTransform.rotate = worldTransform.rotate * weaponRotation;
 								worldTransform.scale = scale;
 
-								RE::NiTransform localTransform = Utils::GetLocalTransform(trailRootNode->children[currentBoneIdx].get(), worldTransform);
+								auto& firstUnusedSegment = trailRootNode->children[currentBoneIdx];
+								if (!firstUnusedSegment) {
+									return endTrail();
+								}
+								RE::NiTransform localTransform = Utils::GetLocalTransform(firstUnusedSegment.get(), worldTransform);
 
 								for (uint32_t i = currentBoneIdx; i < trailRootNode->children.size(); ++i) {
 									auto& segmentBone = trailRootNode->children[i];

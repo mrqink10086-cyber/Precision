@@ -582,6 +582,9 @@ namespace Utils
 
 	void ForEachRagdollDriver(RE::TESObjectREFR* a_refr, std::function<void(RE::hkbRagdollDriver*)> a_func)
 	{
+		if (!a_refr) {
+			return;
+		}
 		RE::BSAnimationGraphManagerPtr animGraphManager;
 		if (a_refr->GetAnimationGraphManager(animGraphManager)) {
 			RE::BSSpinLockGuard animGraphLocker(animGraphManager->GetRuntimeData().updateLock);

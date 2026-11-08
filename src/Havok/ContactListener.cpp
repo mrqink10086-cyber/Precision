@@ -206,7 +206,7 @@ void ContactListener::ContactPointCallback(const RE::hkpContactPointEvent& a_eve
 	}
 
 	if (layerA == CollisionLayer::kPrecisionAttack && layerB == CollisionLayer::kPrecisionAttack) {
-		if (precisionHandler->weaponWeaponCollisionCallbacks.size() > 0) {
+		if (precisionHandler->weaponWeaponCollisionCallbacks.Size() > 0) {
 			RE::hkpShapeKey* hittingBodyShapeKeysPtr = a_event.GetShapeKeys(hitBodyIdx ? 0 : 1);
 			RE::hkpShapeKey* hitBodyShapeKeysPtr = a_event.GetShapeKeys(hitBodyIdx);
 			RE::hkpShapeKey hittingBodyShapeKey = hittingBodyShapeKeysPtr ? *hittingBodyShapeKeysPtr : RE::HK_INVALID_SHAPE_KEY;
@@ -219,6 +219,10 @@ void ContactListener::ContactPointCallback(const RE::hkpContactPointEvent& a_eve
 			auto cachedHitRefHandle = precisionHandler->CacheHitData(precisionHitData, attackCollision->extraDataMap);
 			auto callbackReturns = precisionHandler->RunWeaponWeaponCollisionCallbacks(precisionHitData);
 			precisionHandler->RemoveCachedHitData(cachedHitRefHandle);
+			if (callbackReturns.empty()) {
+				a_event.contactPointProperties->flags.set(RE::hkpContactPointProperties::Flag::kIsDisabled);
+				return;  // Disable weapon-weapon collisions when no callbacks remain
+			}
 
 			for (auto& entry : callbackReturns) {
 				if (entry.bIgnoreHit) {
@@ -236,7 +240,7 @@ void ContactListener::ContactPointCallback(const RE::hkpContactPointEvent& a_eve
 	if (hitLayer == CollisionLayer::kProjectile) {
 		RE::hkVector4 projectileVelocity = hitRigidBody->motion.GetPointVelocity(hkHitPos);
 		if (!projectileVelocity.IsEqual(RE::hkVector4())) {  // projectile velocity is not zero
-			if (precisionHandler->weaponProjectileCollisionCallbacks.size() > 0) {
+			if (precisionHandler->weaponProjectileCollisionCallbacks.Size() > 0) {
 				RE::hkpShapeKey* hittingBodyShapeKeysPtr = a_event.GetShapeKeys(hitBodyIdx ? 0 : 1);
 				RE::hkpShapeKey* hitBodyShapeKeysPtr = a_event.GetShapeKeys(hitBodyIdx);
 				RE::hkpShapeKey hittingBodyShapeKey = hittingBodyShapeKeysPtr ? *hittingBodyShapeKeysPtr : RE::HK_INVALID_SHAPE_KEY;
@@ -249,6 +253,10 @@ void ContactListener::ContactPointCallback(const RE::hkpContactPointEvent& a_eve
 				auto cachedHitRefHandle = precisionHandler->CacheHitData(precisionHitData, attackCollision->extraDataMap);
 				auto callbackReturns = precisionHandler->RunWeaponProjectileCollisionCallbacks(precisionHitData);
 				precisionHandler->RemoveCachedHitData(cachedHitRefHandle);
+				if (callbackReturns.empty()) {
+					a_event.contactPointProperties->flags.set(RE::hkpContactPointProperties::Flag::kIsDisabled);
+					return;  // Disable weapon-projectile collisions when no callbacks remain
+				}
 
 				for (auto& entry : callbackReturns) {
 					if (entry.bIgnoreHit) {

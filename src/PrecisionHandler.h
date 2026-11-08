@@ -3,8 +3,10 @@
 #include "AttackCollision.h"
 #include "AttackTrail.h"
 #include "CachedAttackData.h"
+#include "CallbackRegistry.h"
 #include "Havok/ActiveRagdoll.h"
 #include "Havok/ContactListener.h"
+#include "JobQueue.h"
 #include "Offsets.h"
 #include "PendingHit.h"
 #include "PrecisionAPI.h"
@@ -257,8 +259,10 @@ public:
 	[[nodiscard]] static RE::NiAVObject* GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::NiAVObject* a_clone);
 	[[nodiscard]] static RE::hkpRigidBody* GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::hkpRigidBody* a_clone);
 
+	using PostHitCallbackSnapshot = CallbackRegistry<SKSE::PluginHandle, PostHitCallback>::Snapshot;
+	[[nodiscard]] PostHitCallbackSnapshot CapturePostHitCallbacks() const;
 	std::vector<PreHitCallbackReturn> RunPreHitCallbacks(const PrecisionHitData& a_precisionHitData);
-	void RunPostHitCallbacks(const PrecisionHitData& a_precisionHitData, const RE::HitData& a_hitData);
+	void RunPostHitCallbacks(const PostHitCallbackSnapshot& a_snapshot, const PrecisionHitData& a_precisionHitData, const RE::HitData& a_hitData);
 	void RunPrePhysicsStepCallbacks(RE::bhkWorld* a_world);
 	CollisionFilterComparisonResult RunCollisionFilterComparisonCallbacks(RE::bhkCollisionFilter* a_collisionFilter, uint32_t a_filterInfoA, uint32_t a_filterInfoB);
 	std::vector<WeaponCollisionCallbackReturn> RunWeaponWeaponCollisionCallbacks(const PrecisionHitData& a_precisionHitData);
@@ -437,42 +441,28 @@ public:
 	template <class T, typename... Args>
 	void QueuePrePhysicsJob(Args&&... args)
 	{
-		WriteLocker locker(prePhysicsStepJobsLock);
-
-		static_assert(std::is_base_of<GenericJob, T>::value);
-		_prePhysicsStepJobs.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+		_prePhysicsStepJobs.Push<T>(std::forward<Args>(args)...);
 	}
 
 	template <class T, typename... Args>
 	void QueueMainUpdateJob(Args&&... args)
 	{
-		WriteLocker locker(mainUpdateJobsLock);
-
-		static_assert(std::is_base_of<GenericJob, T>::value);
-		_mainUpdateJobs.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+		_mainUpdateJobs.Push<T>(std::forward<Args>(args)...);
 	}
 
 	template <class T, typename... Args>
 	void QueuePostHavokHitJob(Args&&... args)
 	{
-		WriteLocker locker(postHavokHitJobsLock);
-
-		static_assert(std::is_base_of<GenericJob, T>::value);
-		_postHavokHitJobs.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+		_postHavokHitJobs.Push<T>(std::forward<Args>(args)...);
 	}
 
 	template <class T, typename... Args>
 	void QueueDelayedJob(Args&&... args)
 	{
-		WriteLocker locker(delayedJobsLock);
-
-		static_assert(std::is_base_of<DelayedJob, T>::value);
-		_delayedJobs.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+		_delayedJobs.Push<T>(std::forward<Args>(args)...);
 	}
 
 private:
-	mutable Lock callbacksLock;
-
 	PrecisionHandler() = default;
 	PrecisionHandler(const PrecisionHandler&) = delete;
 	PrecisionHandler(PrecisionHandler&&) = delete;
@@ -490,15 +480,15 @@ private:
 
 	static bool CalculateHitImpulse(RE::hkpRigidBody* a_rigidBody, const RE::NiPoint3& a_hitVelocity, float a_impulseMult, bool a_bIsActiveRagdoll, bool a_bAttackerIsPlayer, RE::NiPoint3& a_outImpulse);
 
-	std::unordered_map<SKSE::PluginHandle, PreHitCallback> preHitCallbacks;
-	std::unordered_map<SKSE::PluginHandle, PostHitCallback> postHitCallbacks;
-	std::unordered_map<SKSE::PluginHandle, PrePhysicsStepCallback> prePhysicsStepCallbacks;
-	std::unordered_map<SKSE::PluginHandle, CollisionFilterComparisonCallback> collisionFilterComparisonCallbacks;
-	std::unordered_map<SKSE::PluginHandle, WeaponCollisionCallback> weaponWeaponCollisionCallbacks;
-	std::unordered_map<SKSE::PluginHandle, WeaponCollisionCallback> weaponProjectileCollisionCallbacks;
-	std::unordered_map<SKSE::PluginHandle, CollisionFilterSetupCallback> collisionFilterSetupCallbacks;
-	std::unordered_map<SKSE::PluginHandle, ContactListenerCallback> contactListenerCallbacks;
-	std::unordered_map<SKSE::PluginHandle, PrecisionLayerSetupCallback> precisionLayerSetupCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, PreHitCallback> preHitCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, PostHitCallback> postHitCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, PrePhysicsStepCallback> prePhysicsStepCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, CollisionFilterComparisonCallback> collisionFilterComparisonCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, WeaponCollisionCallback> weaponWeaponCollisionCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, WeaponCollisionCallback> weaponProjectileCollisionCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, CollisionFilterSetupCallback> collisionFilterSetupCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, ContactListenerCallback> contactListenerCallbacks;
+	CallbackRegistry<SKSE::PluginHandle, PrecisionLayerSetupCallback> precisionLayerSetupCallbacks;
 
 	mutable Lock extraParameterNamesLock;
 	struct ParameterNameHash
@@ -508,15 +498,10 @@ private:
 	};
 	std::unordered_set<std::string, ParameterNameHash, std::equal_to<>> _extraParameterNames;
 
-	mutable Lock prePhysicsStepJobsLock;
-	std::vector<std::unique_ptr<GenericJob>> _prePhysicsStepJobs;
-
-	mutable Lock mainUpdateJobsLock;
-	std::vector<std::unique_ptr<GenericJob>> _mainUpdateJobs;
-
-	mutable Lock postHavokHitJobsLock;
-	std::vector<std::unique_ptr<GenericJob>> _postHavokHitJobs;
-
-	mutable Lock delayedJobsLock;
-	std::vector<std::unique_ptr<DelayedJob>> _delayedJobs;
+	std::mutex _clearLock;
+	std::atomic<std::uint64_t> _jobEpoch{ 0 };
+	JobQueue<GenericJob> _prePhysicsStepJobs{ _jobEpoch };
+	JobQueue<GenericJob> _mainUpdateJobs{ _jobEpoch };
+	JobQueue<GenericJob> _postHavokHitJobs{ _jobEpoch };
+	JobQueue<DelayedJob> _delayedJobs{ _jobEpoch };
 };

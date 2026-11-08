@@ -253,11 +253,20 @@ void PrecisionHandler::Update(float a_deltaTime)
 
 void PrecisionHandler::ApplyHitImpulse(RE::ObjectRefHandle a_refHandle, RE::hkpRigidBody* a_rigidBody, const RE::NiPoint3& a_hitVelocity, const RE::hkVector4& a_hitPosition, float a_impulseMult, bool a_bIsActiveRagdoll, bool a_bAttackerIsPlayer, bool a_bIsDeferred /*= false */)
 {
-	if (!a_refHandle) {
+	if (!a_refHandle || !a_rigidBody) {
 		return;
 	}
 
 	auto refr = a_refHandle.get();
+	if (!refr) {
+		return;
+	}
+	if (a_bIsDeferred) {
+		auto root = refr->Get3D();
+		if (!root || !Utils::FindRigidBody(root, a_rigidBody)) {
+			return;
+		}
+	}
 
 	if (!a_bIsDeferred) {
 		if (auto actor = refr->As<RE::Actor>()) {
@@ -710,6 +719,14 @@ void PrecisionHandler::Initialize()
 
 void PrecisionHandler::Clear()
 {
+	std::lock_guard clearLock(_clearLock);
+	_jobEpoch.fetch_add(1, std::memory_order_acq_rel);
+	SKSE::stl::scope_exit resumeJobs([this] { _jobEpoch.fetch_add(1, std::memory_order_release); });
+	_prePhysicsStepJobs.Clear();
+	_mainUpdateJobs.Clear();
+	_postHavokHitJobs.Clear();
+	_delayedJobs.Clear();
+
 	{
 		WriteLocker locker(activeCollisionGroupsLock);
 		activeCollisionGroups.clear();
@@ -757,7 +774,10 @@ void PrecisionHandler::Clear()
 
 	PrecisionHandler::contactListener = ContactListener{};
 
-	weaponMeshLengthMap.clear();
+	{
+		WriteLocker locker(weaponMeshLengthLock);
+		weaponMeshLengthMap.clear();
+	}
 }
 
 void PrecisionHandler::OnPreLoadGame()
@@ -771,30 +791,22 @@ void PrecisionHandler::OnPostLoadGame()
 
 void PrecisionHandler::ProcessPrePhysicsStepJobs()
 {
-	WriteLocker locker(prePhysicsStepJobsLock);
-
-	RuntimeAlgorithms::ProcessRetained(_prePhysicsStepJobs, [](const auto& a_job) { return a_job->Run(); });
+	_prePhysicsStepJobs.Process([](const auto& a_job) { return a_job->Run(); });
 }
 
 void PrecisionHandler::ProcessMainUpdateJobs()
 {
-	WriteLocker locker(mainUpdateJobsLock);
-
-	RuntimeAlgorithms::ProcessRetained(_mainUpdateJobs, [](const auto& a_job) { return a_job->Run(); });
+	_mainUpdateJobs.Process([](const auto& a_job) { return a_job->Run(); });
 }
 
 void PrecisionHandler::ProcessPostHavokHitJobs()
 {
-	WriteLocker locker(postHavokHitJobsLock);
-
-	RuntimeAlgorithms::ProcessRetained(_postHavokHitJobs, [](const auto& a_job) { return a_job->Run(); });
+	_postHavokHitJobs.Process([](const auto& a_job) { return a_job->Run(); });
 }
 
 void PrecisionHandler::ProcessDelayedJobs(float a_deltaTime)
 {
-	WriteLocker locker(delayedJobsLock);
-
-	RuntimeAlgorithms::ProcessRetained(_delayedJobs, [a_deltaTime](const auto& a_job) { return a_job->Run(a_deltaTime); });
+	_delayedJobs.Process([a_deltaTime](const auto& a_job) { return a_job->Run(a_deltaTime); });
 }
 
 bool PrecisionHandler::GetAttackCollisionDefinition(RE::Actor* a_actor, AttackDefinition& a_outAttackDefinition, std::optional<bool> a_bIsLeftSwing /*= std::nullopt*/, AttackDefinition::SwingEvent a_swingEvent /*= AttackDefinition::SwingEvent::kWeaponSwing*/) const
@@ -1673,173 +1685,92 @@ RE::NiPointer<RE::BGSAttackData>& PrecisionHandler::GetOppositeAttackEvent(RE::N
 
 bool PrecisionHandler::AddPreHitCallback(SKSE::PluginHandle a_pluginHandle, PreHitCallback a_preHitCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (preHitCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	preHitCallbacks.emplace(a_pluginHandle, a_preHitCallback);
-	return true;
+	return preHitCallbacks.Add(a_pluginHandle, std::move(a_preHitCallback));
 }
 
 bool PrecisionHandler::AddPostHitCallback(SKSE::PluginHandle a_pluginHandle, PostHitCallback a_postHitCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (postHitCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	postHitCallbacks.emplace(a_pluginHandle, a_postHitCallback);
-	return true;
+	return postHitCallbacks.Add(a_pluginHandle, std::move(a_postHitCallback));
 }
 
 bool PrecisionHandler::AddPrePhysicsStepCallback(SKSE::PluginHandle a_pluginHandle, PrePhysicsStepCallback a_prePhysicsHitCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (prePhysicsStepCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	prePhysicsStepCallbacks.emplace(a_pluginHandle, a_prePhysicsHitCallback);
-	return true;
+	return prePhysicsStepCallbacks.Add(a_pluginHandle, std::move(a_prePhysicsHitCallback));
 }
 
 bool PrecisionHandler::AddCollisionFilterComparisonCallback(SKSE::PluginHandle a_pluginHandle, CollisionFilterComparisonCallback a_collisionFilterComparisonCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (collisionFilterComparisonCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	collisionFilterComparisonCallbacks.emplace(a_pluginHandle, a_collisionFilterComparisonCallback);
-	return true;
+	return collisionFilterComparisonCallbacks.Add(a_pluginHandle, std::move(a_collisionFilterComparisonCallback));
 }
 
 bool PrecisionHandler::AddWeaponWeaponCollisionCallback(SKSE::PluginHandle a_pluginHandle, WeaponCollisionCallback a_weaponCollisionCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (weaponWeaponCollisionCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	weaponWeaponCollisionCallbacks.emplace(a_pluginHandle, a_weaponCollisionCallback);
-	return true;
+	return weaponWeaponCollisionCallbacks.Add(a_pluginHandle, std::move(a_weaponCollisionCallback));
 }
 
 bool PrecisionHandler::AddWeaponProjectileCollisionCallback(SKSE::PluginHandle a_pluginHandle, WeaponCollisionCallback a_weaponCollisionCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (weaponProjectileCollisionCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	weaponProjectileCollisionCallbacks.emplace(a_pluginHandle, a_weaponCollisionCallback);
-	return true;
+	return weaponProjectileCollisionCallbacks.Add(a_pluginHandle, std::move(a_weaponCollisionCallback));
 }
 
 bool PrecisionHandler::AddCollisionFilterSetupCallback(SKSE::PluginHandle a_pluginHandle, CollisionFilterSetupCallback a_collisionFilterSetupCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (collisionFilterSetupCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	collisionFilterSetupCallbacks.emplace(a_pluginHandle, a_collisionFilterSetupCallback);
-	return true;
+	return collisionFilterSetupCallbacks.Add(a_pluginHandle, std::move(a_collisionFilterSetupCallback));
 }
 
 bool PrecisionHandler::AddContactListenerCallback(SKSE::PluginHandle a_pluginHandle, ContactListenerCallback a_contactListenerCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (contactListenerCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	contactListenerCallbacks.emplace(a_pluginHandle, a_contactListenerCallback);
-	return true;
+	return contactListenerCallbacks.Add(a_pluginHandle, std::move(a_contactListenerCallback));
 }
 
 bool PrecisionHandler::AddPrecisionLayerSetupCallback(SKSE::PluginHandle a_pluginHandle, PrecisionLayerSetupCallback a_precisionLayerSetupCallback)
 {
-	WriteLocker locker(callbacksLock);
-
-	if (precisionLayerSetupCallbacks.contains(a_pluginHandle)) {
-		return false;
-	}
-
-	precisionLayerSetupCallbacks.emplace(a_pluginHandle, a_precisionLayerSetupCallback);
-	return true;
+	return precisionLayerSetupCallbacks.Add(a_pluginHandle, std::move(a_precisionLayerSetupCallback));
 }
 
 bool PrecisionHandler::RemovePreHitCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return preHitCallbacks.erase(a_pluginHandle);
+	return preHitCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemovePostHitCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return postHitCallbacks.erase(a_pluginHandle);
+	return postHitCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemovePrePhysicsStepCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return prePhysicsStepCallbacks.erase(a_pluginHandle);
+	return prePhysicsStepCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemoveCollisionFilterComparisonCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return collisionFilterComparisonCallbacks.erase(a_pluginHandle);
+	return collisionFilterComparisonCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemoveWeaponWeaponCollisionCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return weaponWeaponCollisionCallbacks.erase(a_pluginHandle);
+	return weaponWeaponCollisionCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemoveWeaponProjectileCollisionCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return weaponProjectileCollisionCallbacks.erase(a_pluginHandle);
+	return weaponProjectileCollisionCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemoveCollisionFilterSetupCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return collisionFilterSetupCallbacks.erase(a_pluginHandle);
+	return collisionFilterSetupCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemoveContactListenerCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return contactListenerCallbacks.erase(a_pluginHandle);
+	return contactListenerCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::RemovePrecisionLayerSetupCallback(SKSE::PluginHandle a_pluginHandle)
 {
-	WriteLocker locker(callbacksLock);
-
-	return precisionLayerSetupCallbacks.erase(a_pluginHandle);
+	return precisionLayerSetupCallbacks.Remove(a_pluginHandle);
 }
 
 bool PrecisionHandler::AddExtraParameterName(const std::string_view a_name)
@@ -2018,6 +1949,9 @@ RE::NiAVObject* PrecisionHandler::GetOriginalFromClone(RE::ActorHandle a_actorHa
 
 RE::hkpRigidBody* PrecisionHandler::GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::hkpRigidBody* a_clone)
 {
+	if (!a_clone) {
+		return nullptr;
+	}
 	ReadLocker locker(activeActorsLock);
 
 	auto search = PrecisionHandler::activeActors.find(a_actorHandle);
@@ -2031,106 +1965,99 @@ RE::hkpRigidBody* PrecisionHandler::GetOriginalFromClone(RE::ActorHandle a_actor
 
 std::vector<PRECISION_API::PreHitCallbackReturn> PrecisionHandler::RunPreHitCallbacks(const PrecisionHitData& a_precisionHitData)
 {
-	ReadLocker locker(callbacksLock);
-
 	std::vector<PreHitCallbackReturn> ret;
-	for (auto& entry : preHitCallbacks) {
-		ret.emplace_back(entry.second(a_precisionHitData));
-	}
+	preHitCallbacks.ForEach([&](auto& callback) {
+		ret.emplace_back(callback(a_precisionHitData));
+		return true;
+	});
 	return ret;
 }
 
-void PrecisionHandler::RunPostHitCallbacks(const PrecisionHitData& a_precisionHitData, const RE::HitData& a_hitData)
+PrecisionHandler::PostHitCallbackSnapshot PrecisionHandler::CapturePostHitCallbacks() const
 {
-	ReadLocker locker(callbacksLock);
+	return postHitCallbacks.Capture();
+}
 
-	for (auto& entry : postHitCallbacks) {
-		entry.second(a_precisionHitData, a_hitData);
-	}
+void PrecisionHandler::RunPostHitCallbacks(const PostHitCallbackSnapshot& a_snapshot, const PrecisionHitData& a_precisionHitData, const RE::HitData& a_hitData)
+{
+	postHitCallbacks.ForEach(a_snapshot, [&](auto& callback) {
+		callback(a_precisionHitData, a_hitData);
+		return true;
+	});
 }
 
 void PrecisionHandler::RunPrePhysicsStepCallbacks(RE::bhkWorld* a_world)
 {
-	{
-		ReadLocker locker(callbacksLock);
-
-		for (auto& entry : prePhysicsStepCallbacks) {
-			entry.second(a_world);
-		}
-	}
+	prePhysicsStepCallbacks.ForEach([&](auto& callback) {
+		callback(a_world);
+		return true;
+	});
 
 	ProcessPrePhysicsStepJobs();
 }
 
 PRECISION_API::CollisionFilterComparisonResult PrecisionHandler::RunCollisionFilterComparisonCallbacks(RE::bhkCollisionFilter* a_collisionFilter, uint32_t a_filterInfoA, uint32_t a_filterInfoB)
 {
-	ReadLocker locker(callbacksLock);
-
-	for (auto& entry : collisionFilterComparisonCallbacks) {
-		CollisionFilterComparisonResult result = entry.second(a_collisionFilter, a_filterInfoA, a_filterInfoB);
+	CollisionFilterComparisonResult ret = PRECISION_API::CollisionFilterComparisonResult::Continue;
+	collisionFilterComparisonCallbacks.ForEach([&](auto& callback) {
+		CollisionFilterComparisonResult result = callback(a_collisionFilter, a_filterInfoA, a_filterInfoB);
 		if (result != CollisionFilterComparisonResult::Continue) {
-			return result;
+			ret = result;
+			return false;
 		}
-	}
+		return true;
+	});
 
-	return PRECISION_API::CollisionFilterComparisonResult::Continue;
+	return ret;
 }
 
 std::vector<PrecisionHandler::WeaponCollisionCallbackReturn> PrecisionHandler::RunWeaponWeaponCollisionCallbacks(const PrecisionHitData& a_precisionHitData)
 {
-	ReadLocker locker(callbacksLock);
-
 	std::vector<WeaponCollisionCallbackReturn> ret;
-	for (auto& entry : weaponWeaponCollisionCallbacks) {
-		ret.emplace_back(entry.second(a_precisionHitData));
-	}
+	weaponWeaponCollisionCallbacks.ForEach([&](auto& callback) {
+		ret.emplace_back(callback(a_precisionHitData));
+		return true;
+	});
 	return ret;
 }
 
 std::vector<PrecisionHandler::WeaponCollisionCallbackReturn> PrecisionHandler::RunWeaponProjectileCollisionCallbacks(const PrecisionHitData& a_precisionHitData)
 {
-	ReadLocker locker(callbacksLock);
-
 	std::vector<WeaponCollisionCallbackReturn> ret;
-	for (auto& entry : weaponProjectileCollisionCallbacks) {
-		ret.emplace_back(entry.second(a_precisionHitData));
-	}
+	weaponProjectileCollisionCallbacks.ForEach([&](auto& callback) {
+		ret.emplace_back(callback(a_precisionHitData));
+		return true;
+	});
 	return ret;
 }
 
 void PrecisionHandler::RunCollisionFilterSetupCallbacks(RE::bhkCollisionFilter* a_collisionFilter)
 {
-	ReadLocker locker(callbacksLock);
-
-	for (auto& entry : collisionFilterSetupCallbacks) {
-		entry.second(a_collisionFilter);
-	}
+	collisionFilterSetupCallbacks.ForEach([&](auto& callback) {
+		callback(a_collisionFilter);
+		return true;
+	});
 }
 
 void PrecisionHandler::RunContactListenerCallbacks(const RE::hkpContactPointEvent& a_event)
 {
-	ReadLocker locker(callbacksLock);
-
-	for (auto& entry : contactListenerCallbacks) {
-		entry.second(a_event);
-	}
+	contactListenerCallbacks.ForEach([&](auto& callback) {
+		callback(a_event);
+		return true;
+	});
 }
 
 void PrecisionHandler::RunPrecisionLayerSetupCallbacks()
 {
-	ReadLocker locker(callbacksLock);
-
-	if (precisionLayerSetupCallbacks.empty()) {
-		return;
-	}
-
 	uint64_t attackLayersToAdd = 0;
 	uint64_t attackLayersToRemove = 0;
 	uint64_t bodyLayersToAdd = 0;
 	uint64_t bodyLayersToRemove = 0;
+	bool invoked = false;
 
-	for (auto& entry : precisionLayerSetupCallbacks) {
-		auto result = entry.second();
+	precisionLayerSetupCallbacks.ForEach([&](auto& callback) {
+		invoked = true;
+		auto result = callback();
 
 		switch (result.precisionLayerType) {
 		case PRECISION_API::PrecisionLayerType::Attack:
@@ -2142,6 +2069,11 @@ void PrecisionHandler::RunPrecisionLayerSetupCallbacks()
 			bodyLayersToRemove |= result.layersToRemove;
 			break;
 		}
+		return true;
+	});
+
+	if (!invoked) {
+		return;
 	}
 
 	Settings::iPrecisionAttackLayerBitfield |= attackLayersToAdd;

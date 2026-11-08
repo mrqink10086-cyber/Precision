@@ -54,6 +54,8 @@ struct AttackCollision
 
 private:
 	mutable Lock hitMaterialsLock;
+	// Teardown must still reach the creation world after the actor handle expires.
+	RE::NiPointer<RE::bhkWorld> _collisionWorld;
 
 	bool CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor, RE::NiNode* a_parentNode, RE::NiNode* a_newNode, RE::hkVector4& a_vertexA, RE::hkVector4& a_vertexB, float a_radius, CollisionLayer a_collisionLayer);
 	bool RemoveCollision(RE::NiPointer<RE::NiNode>& a_node);

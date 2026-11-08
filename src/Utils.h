@@ -32,7 +32,7 @@ namespace Utils
 	{
 		RE::NiPoint3 a;
 		RE::NiPoint3 b;
-		float radius;
+		float radius = 0.f;
 	};
 
 	[[nodiscard]] inline RE::NiQuaternion MatrixToQuaternion(const RE::NiMatrix3& m)

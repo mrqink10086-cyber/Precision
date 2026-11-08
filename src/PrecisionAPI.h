@@ -174,6 +174,7 @@ namespace PRECISION_API
 		/// <summary>
 		/// Removes the callback that will run before Precision's hit function.
 		/// </summary>
+		/// <remarks>All Remove callback methods follow this rule: when called from a Precision callback or callback-capture destructor, removal disables the callback immediately and skips invocations not yet started, but does not wait for already-started invocations on any thread. Keep the callback's code and captured state valid until all active invocations return. Other callers wait for active invocations and callback-capture destruction to finish. Unregister every callback before unloading its plugin code.</remarks>
 		/// <param name="a_myPluginHandle">Your assigned plugin handle</param>
 		/// <returns>OK, NotRegistered</returns>
 		virtual APIResult RemovePreHitCallback(SKSE::PluginHandle a_myPluginHandle) noexcept = 0;
@@ -345,6 +346,7 @@ namespace PRECISION_API
 		/// <param name="a_actorHandle">Actor handle</param>
 		/// <param name="a_node">Node that's potentially a clone</param>
 		/// <returns>The original node, or nullptr if the given one wasn't a clone</returns>
+		/// <remarks>The node is borrowed; lookup does not retain it. Use it only while the actor's skeleton remains alive and stable.</remarks>
 		virtual RE::NiAVObject* GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::NiAVObject* a_node) noexcept = 0;
 
 		/// <summary>
@@ -353,6 +355,7 @@ namespace PRECISION_API
 		/// <param name="a_actorHandle">Actor handle</param>
 		/// <param name="a_hkpRigidBody">Rigid body that's potentially a clone</param>
 		/// <returns>The original rigid body, or nullptr if the given one wasn't a clone</returns>
+		/// <remarks>The rigid body is borrowed; lookup does not retain it. Use it only while the actor's skeleton and physics state remain alive and stable.</remarks>
 		virtual RE::hkpRigidBody* GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::hkpRigidBody* a_hkpRigidBody) noexcept = 0;
 
 		/// <summary>

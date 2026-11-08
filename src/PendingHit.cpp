@@ -49,7 +49,7 @@ void PendingHit::Run()
 	PrecisionHitData precisionHitData(attacker.get(), target.get(), originalHitRigidBody, hittingRigidBody, niHitPos, niSeparatingNormal, niHitVelocity, hitBodyShapeKey, hittingBodyShapeKey);
 
 	// run pre hit callbacks
-	if (precisionHandler->preHitCallbacks.size() > 0) {
+	{
 		auto callbackReturns = precisionHandler->RunPreHitCallbacks(precisionHitData);
 
 		for (auto& entry : callbackReturns) {
@@ -134,19 +134,20 @@ void PendingHit::Run()
 	if (targetActor) {
 		bool bIsLeftHand = attackCollision->nodeName == "SHIELD"sv;
 
+		auto postHitCallbackSnapshot = precisionHandler->CapturePostHitCallbacks();
 		RE::HitData hitData;
-		HitData_ctor(&hitData);
+		if (!postHitCallbackSnapshot.Empty()) {
+			HitData_ctor(&hitData);
+		}
 
 		auto attackerProcess = attacker->GetActorRuntimeData().currentProcess;
 
-		if (precisionHandler->postHitCallbacks.size() > 0) {
-			//auto currentWeapon = attacker->GetAttackingWeapon();
-			if (attackerProcess) {
-				auto currentWeapon = AIProcess_GetCurrentlyEquippedWeapon(attackerProcess, bIsLeftHand);
-				HitData_Populate(&hitData, attacker.get(), targetActor, currentWeapon, bIsLeftHand);
-				hitData.hitPosition = niHitPos;
-				hitData.hitDirection = niHitVelocity;
-			}
+		//auto currentWeapon = attacker->GetAttackingWeapon();
+		if (attackerProcess && !postHitCallbackSnapshot.Empty()) {
+			auto currentWeapon = AIProcess_GetCurrentlyEquippedWeapon(attackerProcess, bIsLeftHand);
+			HitData_Populate(&hitData, attacker.get(), targetActor, currentWeapon, bIsLeftHand);
+			hitData.hitPosition = niHitPos;
+			hitData.hitDirection = niHitVelocity;
 		}
 
 		bool bIsDead = targetActor->IsDead();
@@ -237,9 +238,7 @@ void PendingHit::Run()
 		}
 
 		// run post hit callbacks
-		if (precisionHandler->postHitCallbacks.size() > 0) {
-			precisionHandler->RunPostHitCallbacks(precisionHitData, hitData);
-		}
+		precisionHandler->RunPostHitCallbacks(postHitCallbackSnapshot, precisionHitData, hitData);
 	}
 
 	PrecisionHandler::RemoveCachedHitData(cachedHitRefHandle);

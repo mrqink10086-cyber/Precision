@@ -75,9 +75,10 @@ AttackCollision::AttackCollision(RE::ActorHandle a_actorHandle, const CollisionD
 						}
 					}
 
-					Utils::Capsule capsule;
-					Utils::GetCapsuleParams(attackCollisionNode.get(), capsule);
-					capsuleLength = fmax(capsule.a.GetDistance(capsule.b), capsule.radius * 2.f);
+					Utils::Capsule capsule{};
+					if (Utils::GetCapsuleParams(attackCollisionNode.get(), capsule)) {
+						capsuleLength = fmax(capsule.a.GetDistance(capsule.b), capsule.radius * 2.f);
+					}
 
 					ID = a_collisionDefinition.ID;
 					bNoRecoil = a_collisionDefinition.bNoRecoil;
@@ -127,7 +128,8 @@ AttackCollision::~AttackCollision()
 
 bool AttackCollision::Add(const CollisionDefinition& a_collisionDefinition)
 {
-	auto actor = actorHandle.get().get();
+	auto actorOwner = actorHandle.get();
+	auto* actor = actorOwner.get();
 	if (!actor) {
 		return false;
 	}
@@ -137,8 +139,8 @@ bool AttackCollision::Add(const CollisionDefinition& a_collisionDefinition)
 		return false;
 	}
 
-	auto world = cell->GetbhkWorld();
-	if (!world) {
+	auto world = RE::NiPointer<RE::bhkWorld>(cell->GetbhkWorld());
+	if (!world || !world->referencedObject) {
 		return false;
 	}
 
@@ -309,6 +311,9 @@ bool AttackCollision::Add(const CollisionDefinition& a_collisionDefinition)
 	}
 
 	auto attackNode = RE::NiNode::Create(0);
+	if (!attackNode) {
+		return false;
+	}
 	node->AttachChild(attackNode, true);
 
 	if (a_collisionDefinition.transform) {
@@ -325,8 +330,12 @@ bool AttackCollision::Add(const CollisionDefinition& a_collisionDefinition)
 		attackNode->local.rotate = newRotation;
 	}
 
-	CreateCollision(world, actor, node, attackNode, vertexA, vertexB, radius, CollisionLayer::kPrecisionAttack);
+	if (!CreateCollision(world.get(), actor, node, attackNode, vertexA, vertexB, radius, CollisionLayer::kPrecisionAttack)) {
+		node->DetachChild(attackNode);
+		return false;
+	}
 
+	_collisionWorld = world;
 	attackCollisionNode = RE::NiPointer<RE::NiNode>(attackNode);
 
 	// Create recoil collision node
@@ -335,6 +344,9 @@ bool AttackCollision::Add(const CollisionDefinition& a_collisionDefinition)
 		(bIsRightWeapon || bIsLeftWeapon) &&
 		((bIsPlayer && Settings::bRecoilPlayer) || (!bIsPlayer && Settings::bRecoilNPC))) {
 		auto recoilNode = RE::NiNode::Create(0);
+		if (!recoilNode) {
+			return true;
+		}
 		node->AttachChild(recoilNode, true);
 
 		if (a_collisionDefinition.transform) {
@@ -351,9 +363,11 @@ bool AttackCollision::Add(const CollisionDefinition& a_collisionDefinition)
 
 		recoilVertexA.quad.m128_f32[0] = Settings::fRecoilCollisionLength * actor->GetScale() * havokWorldScale;
 
-		CreateCollision(world, actor, node, recoilNode, recoilVertexA, recoilVertexB, recoilRadius, CollisionLayer::kPrecisionRecoil);
-
-		recoilCollisionNode = RE::NiPointer<RE::NiNode>(recoilNode);
+		if (CreateCollision(world.get(), actor, node, recoilNode, recoilVertexA, recoilVertexB, recoilRadius, CollisionLayer::kPrecisionRecoil)) {
+			recoilCollisionNode = RE::NiPointer<RE::NiNode>(recoilNode);
+		} else {
+			node->DetachChild(recoilNode);
+		}
 	}
 
 	return true;
@@ -370,6 +384,7 @@ bool AttackCollision::Remove()
 
 	recoilCollisionNode = nullptr;
 	attackCollisionNode = nullptr;
+	_collisionWorld = nullptr;
 
 	return true;
 }
@@ -539,35 +554,36 @@ bool AttackCollision::Update(float a_deltaTime)
 
 			float waterHeight;
 			if (cell->GetWaterHeight(currentPos, waterHeight)) {
-				Utils::Capsule capsule;
-				GetCapsuleParams(attackCollisionNode.get(), capsule);
-				capsule.a = (attackCollisionNode->world.rotate * capsule.a) + currentPos;
-				capsule.b = (attackCollisionNode->world.rotate * capsule.b) + currentPos;
+				Utils::Capsule capsule{};
+				if (Utils::GetCapsuleParams(attackCollisionNode.get(), capsule)) {
+					capsule.a = (attackCollisionNode->world.rotate * capsule.a) + currentPos;
+					capsule.b = (attackCollisionNode->world.rotate * capsule.b) + currentPos;
 
-				if ((capsule.a.z > waterHeight && capsule.b.z < waterHeight) || (capsule.a.z < waterHeight && capsule.b.z > waterHeight)) {
-					constexpr RE::NiPoint3 upVector{ 0.f, 0.f, 1.f };
+					if ((capsule.a.z > waterHeight && capsule.b.z < waterHeight) || (capsule.a.z < waterHeight && capsule.b.z > waterHeight)) {
+						constexpr RE::NiPoint3 upVector{ 0.f, 0.f, 1.f };
 
-					RE::NiPoint3 line = capsule.b - capsule.a;
+						RE::NiPoint3 line = capsule.b - capsule.a;
 
-					// calc line plane intersection
-					float dot = upVector.Dot(capsule.a);
-					float dot2 = upVector.Dot(line);
+						// calc line plane intersection
+						float dot = upVector.Dot(capsule.a);
+						float dot2 = upVector.Dot(line);
 
-					if (dot2 != 0.f) {
-						RE::NiPoint3 intersection = capsule.a + (line * ((waterHeight - dot) / dot2));
+						if (dot2 != 0.f) {
+							RE::NiPoint3 intersection = capsule.a + (line * ((waterHeight - dot) / dot2));
 
-						//RE::BSSoundHandle soundHandle{};
-						//auto audioManager = RE::BSAudioManager::GetSingleton();
-						//audioManager->BuildSoundDataFromEditorID(soundHandle, "CWaterSmall", 17);
-						//if (soundHandle.IsValid()) {
-						//	BSSoundHandle_SetPosition(&soundHandle, intersection.x, intersection.y, intersection.z);
-						//	//soundHandle.SetPosition(intersection);
-						//	soundHandle.Play();
-						//}
-						//RE::BSTempEffectParticle::Spawn(cell, 1.0, "Effects/waterSplash.NIF", RE::NiMatrix3(), intersection, 0.75f, 7, 0);
+							//RE::BSSoundHandle soundHandle{};
+							//auto audioManager = RE::BSAudioManager::GetSingleton();
+							//audioManager->BuildSoundDataFromEditorID(soundHandle, "CWaterSmall", 17);
+							//if (soundHandle.IsValid()) {
+							//	BSSoundHandle_SetPosition(&soundHandle, intersection.x, intersection.y, intersection.z);
+							//	//soundHandle.SetPosition(intersection);
+							//	soundHandle.Play();
+							//}
+							//RE::BSTempEffectParticle::Spawn(cell, 1.0, "Effects/waterSplash.NIF", RE::NiMatrix3(), intersection, 0.75f, 7, 0);
 
-						PlayWaterImpact(21.f, intersection);  // medium impact
-						lastSplashUpdate = lastUpdate;
+							PlayWaterImpact(21.f, intersection);  // medium impact
+							lastSplashUpdate = lastUpdate;
+						}
 					}
 				}
 			}
@@ -594,6 +610,7 @@ bool AttackCollision::CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor,
 	}
 
 	bhkCapsuleShape_ctor(weaponShape);
+	RE::NiPointer<RE::bhkCapsuleShape> weaponShapeOwner(weaponShape);
 	bhkCapsuleShape_SetSize(weaponShape, a_vertexA, a_vertexB, a_radius);
 
 	auto capsuleShape = static_cast<RE::hkpCapsuleShape*>(weaponShape->referencedObject.get());
@@ -651,6 +668,7 @@ bool AttackCollision::CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor,
 	std::memset(rigidBody, 0, sizeof(RE::bhkRigidBody));
 
 	bhkRigidBody_ctor(rigidBody);
+	RE::NiPointer<RE::bhkRigidBody> rigidBodyOwner(rigidBody);
 	bhkRigidBody_ApplyCinfo(rigidBody, &cInfo);
 
 	RE::hkpRigidBody* hkpRb = static_cast<RE::hkpRigidBody*>(rigidBody->referencedObject.get());
@@ -662,6 +680,7 @@ bool AttackCollision::CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor,
 	}
 	std::memset(bhkCollisionObject, 0, sizeof(RE::bhkCollisionObject));
 	bhkNiCollisionObject_NiNode_ctor(bhkCollisionObject, a_newNode);
+	RE::NiPointer<RE::bhkCollisionObject> collisionObjectOwner(bhkCollisionObject);
 	reinterpret_cast<std::uintptr_t*>(bhkCollisionObject)[0] = RE::VTABLE_bhkCollisionObject[0].address();
 
 	bhkNiCollisionObject_setWorldObject(bhkCollisionObject, rigidBody);
@@ -674,26 +693,13 @@ bool AttackCollision::CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor,
 
 bool AttackCollision::RemoveCollision(RE::NiPointer<RE::NiNode>& a_node)
 {
-	auto actor = actorHandle.get().get();
-	if (!actor) {
+	if (!a_node) {
 		return false;
 	}
-
-	auto cell = actor->GetParentCell();
-	if (!cell) {
-		return false;
-	}
-
-	auto world = cell->GetbhkWorld();
-	if (!world) {
-		return false;
-	}
-
-	RE::BSWriteLockGuard lock(world->worldLock);
 
 	bool bRemoved = false;
-
-	if (a_node) {
+	if (auto world = _collisionWorld) {
+		RE::BSWriteLockGuard lock(world->worldLock);
 		if (a_node->collisionObject) {
 			auto niCollisionObject = a_node->collisionObject;
 			if (niCollisionObject) {
@@ -702,24 +708,20 @@ bool AttackCollision::RemoveCollision(RE::NiPointer<RE::NiNode>& a_node)
 					auto rigidBody = RE::NiPointer<RE::bhkRigidBody>(rb);
 					if (rigidBody->referencedObject) {
 						auto hkpRigidBody = RE::hkRefPtr<RE::hkpRigidBody>(static_cast<RE::hkpRigidBody*>(rigidBody->referencedObject.get()));
-						if (hkpRigidBody->world) {
-							hkpWorld_RemoveEntity(static_cast<RE::ahkpWorld*>(world->referencedObject.get()), &bRemoved, hkpRigidBody.get());
+						if (hkpRigidBody->world && hkpRigidBody->world == world->GetWorld1()) {
+							hkpWorld_RemoveEntity(world->GetWorld1(), &bRemoved, hkpRigidBody.get());
 						}
 					}
 				}
 			}
 		}
-
-		auto parentNode = RE::NiPointer<RE::NiNode>(a_node->parent);
-
-		if (parentNode) {
-			parentNode->DetachChild(a_node.get());
-		}
-
-		return true;
 	}
 
-	return false;
+	auto parentNode = RE::NiPointer<RE::NiNode>(a_node->parent);
+	if (parentNode) {
+		parentNode->DetachChild(a_node.get());
+	}
+	return true;
 }
 
 void AttackCollisions::Update(float a_deltaTime)

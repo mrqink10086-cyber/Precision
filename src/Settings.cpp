@@ -1,6 +1,7 @@
 #include "Settings.h"
 #include <toml++/toml.h>
 
+#include "CollisionConfig.h"
 #include "PrecisionHandler.h"
 #include "render/DrawHandler.h"
 
@@ -40,161 +41,87 @@ void Settings::ReadSettings()
 
 	auto dataHandler = RE::TESDataHandler::GetSingleton();
 
-	const auto readCollision = [](const toml::table& a_collisionTable, std::vector<CollisionDefinition>& a_collisionDefs) {
-		// node name
-		auto nodeName = a_collisionTable["NodeName"].value<std::string_view>();
-
-		auto ID = a_collisionTable["ID"].value<uint8_t>();
-
-		// no recoil
-		bool bNoRecoil = false;
-		auto noRecoilVal = a_collisionTable["NoRecoil"].value<bool>();
-		if (noRecoilVal) {
-			bNoRecoil = *noRecoilVal;
+	const auto readCollision = [](const toml::table& a_collisionTable, std::vector<CollisionDefinition>& a_collisionDefs, std::string& a_error) {
+		CollisionConfig::ParsedCollision parsed;
+		if (!CollisionConfig::Parse(a_collisionTable, parsed, a_error)) {
+			return false;
 		}
 
-		// no trail
-		bool bNoTrail = false;
-		auto noTrailVal = a_collisionTable["NoTrail"].value<bool>();
-		if (noTrailVal) {
-			bNoTrail = *noTrailVal;
-		}
-
-		// trail use true length
-		bool bTrailUseTrueLength = false;
-		auto trailUseTrueLengthVal = a_collisionTable["TrailUseTrueLength"].value<bool>();
-		if (trailUseTrueLengthVal) {
-			bTrailUseTrueLength = *trailUseTrueLengthVal;
-		}
-
-		// weapon tip
-		bool bWeaponTip = false;
-		auto weaponTipVal = a_collisionTable["WeaponTip"].value<bool>();
-		if (weaponTipVal) {
-			bWeaponTip = *weaponTipVal;
-		}
-
-		// damage mult
-		float damageMult = 1.f;
-		auto damageMultVal = a_collisionTable["DamageMult"].value<float>();
-		if (damageMultVal) {
-			damageMult = *damageMultVal;
-		}
-
-		// duration
-		float duration = 0.f;
-		auto durationVal = a_collisionTable["Duration"].value<float>();
-		if (durationVal) {
-			duration = *durationVal;
-		}
-
-		// duration mult
-		auto durationMult = a_collisionTable["DurationMult"].value<float>();
-
-		// delay
-		auto delay = a_collisionTable["Delay"].value<float>();
-
-		// radius
-		auto radius = a_collisionTable["Radius"].value<float>();
-
-		// radius mult
-		auto radiusMult = a_collisionTable["RadiusMult"].value<float>();
-
-		// length
-		auto length = a_collisionTable["Length"].value<float>();
-
-		// length mult
-		auto lengthMult = a_collisionTable["LengthMult"].value<float>();
-
-		// transform
 		std::optional<RE::NiTransform> transform;
-		{
-			const auto fillVector = [&](const toml::table* a_table, RE::NiPoint3& a_outVector) {
-				if (a_table) {
-					auto x = a_table->get("x");
-					if (x) {
-						a_outVector.x = *x->value<float>();
-					}
-					auto y = a_table->get("y");
-					if (y) {
-						a_outVector.y = *y->value<float>();
-					}
-					auto z = a_table->get("z");
-					if (z) {
-						a_outVector.z = *z->value<float>();
-					}
-				}
-			};
+		if (parsed.rotation || parsed.translation || parsed.scale) {
+			transform = RE::NiTransform();
 
-			auto rotationTbl = a_collisionTable["Rotation"].as_table();
-			auto translationTbl = a_collisionTable["Translation"].as_table();
-			auto scaleVal = a_collisionTable["Scale"].value<float>();
-
-			if (rotationTbl || translationTbl || scaleVal) {
-				transform = RE::NiTransform();
-
-				// rotation
-				if (rotationTbl) {
-					RE::NiPoint3 rotationVector{ 0.f, 0.f, 0.f };
-					fillVector(rotationTbl, rotationVector);
-					rotationVector.x = Utils::DegreeToRadian(rotationVector.x);
-					rotationVector.y = Utils::DegreeToRadian(rotationVector.y);
-					rotationVector.z = Utils::DegreeToRadian(rotationVector.z);
-					transform->rotate.SetEulerAnglesXYZ(rotationVector);
-				}
-
-				// translation
-				if (translationTbl) {
-					fillVector(translationTbl, transform->translate);
-				}
-
-				// scale
-				if (scaleVal) {
-					transform->scale = *scaleVal;
-				}
+			if (parsed.rotation) {
+				RE::NiPoint3 rotationVector{ (*parsed.rotation)[0], (*parsed.rotation)[1], (*parsed.rotation)[2] };
+				rotationVector.x = Utils::DegreeToRadian(rotationVector.x);
+				rotationVector.y = Utils::DegreeToRadian(rotationVector.y);
+				rotationVector.z = Utils::DegreeToRadian(rotationVector.z);
+				transform->rotate.SetEulerAnglesXYZ(rotationVector);
+			}
+			if (parsed.translation) {
+				transform->translate = { (*parsed.translation)[0], (*parsed.translation)[1], (*parsed.translation)[2] };
+			}
+			if (parsed.scale) {
+				transform->scale = *parsed.scale;
 			}
 		}
 
 		std::optional<RE::NiPoint3> groundShake;
-		{
-			auto groundShakeTbl = a_collisionTable["GroundShake"].as_table();
-			if (groundShakeTbl) {
-				groundShake = RE::NiPoint3();
-
-				auto strength = groundShakeTbl->get("Strength");
-				if (strength) {
-					groundShake->x = *strength->value<float>();
-				}
-				auto shakeDuration = groundShakeTbl->get("Duration");
-				if (shakeDuration) {
-					groundShake->y = *shakeDuration->value<float>();
-				}
-				auto frequency = groundShakeTbl->get("Frequency");
-				if (frequency) {
-					groundShake->z = *frequency->value<float>();
-				}
-			}
+		if (parsed.groundShake) {
+			groundShake = RE::NiPoint3{ (*parsed.groundShake)[0], (*parsed.groundShake)[1], (*parsed.groundShake)[2] };
 		}
 
-		a_collisionDefs.emplace_back(*nodeName, ID, bNoRecoil, bNoTrail, bTrailUseTrueLength, bWeaponTip, damageMult, duration, durationMult, delay, radius, radiusMult, length, lengthMult, transform, groundShake, std::nullopt);
+		a_collisionDefs.emplace_back(parsed.nodeName, parsed.ID, parsed.noRecoil, parsed.noTrail, parsed.trailUseTrueLength, parsed.weaponTip, parsed.damageMult, parsed.duration, parsed.durationMult, parsed.delay, parsed.radius, parsed.radiusMult, parsed.length, parsed.lengthMult, transform, groundShake, std::nullopt);
+		return true;
 	};
 
 	const auto readToml = [&](std::filesystem::path path) {
 		logger::info("  Reading {}...", path.string());
 		try {
 			const auto tbl = toml::parse_file(path.c_str());
+			const auto readTable = [&](const toml::node& a_node, std::string_view a_context) {
+				const auto* table = a_node.as_table();
+				if (!table) {
+					logger::warn("Skipping invalid {} table in {}", a_context, path.string());
+				}
+				return table;
+			};
+			const auto readCollisionArray = [&](const toml::array& a_array, std::vector<CollisionDefinition>& a_collisionDefs, std::string_view a_context) {
+				for (const auto& collisionEntry : a_array) {
+					const auto* collisionTable = collisionEntry.as_table();
+					std::string error;
+					if (!collisionTable || !readCollision(*collisionTable, a_collisionDefs, error)) {
+						logger::warn("Skipping {} definition with invalid collision in {}: {}", a_context, path.string(), collisionTable ? error : "Collision entry must be a table");
+						return false;
+					}
+				}
+				return true;
+			};
+
 			auto attackDefinitionsArr = tbl.get_as<toml::array>("AttackDefinitions");
 			if (attackDefinitionsArr) {
 				for (auto&& elem : *attackDefinitionsArr) {
-					auto& definitionsTbl = *elem.as_table();
+					const auto* definitionsTable = readTable(elem, "AttackDefinitions"sv);
+					if (!definitionsTable) {
+						continue;
+					}
+					const auto& definitionsTbl = *definitionsTable;
 
 					auto formIDs = definitionsTbl["BodyPartDataFormIDs"].as_array();
 					if (formIDs) {
 						for (auto& formIDEntry : *formIDs) {
-							auto& formIDTbl = *formIDEntry.as_table();
+							const auto* formIDTbl = formIDEntry.as_table();
+							if (!formIDTbl) {
+								logger::warn("Skipping body part data entry with invalid FormID table in {}", path.string());
+								continue;
+							}
 
-							auto formID = formIDTbl["FormID"].value<RE::FormID>();
-							auto pluginName = formIDTbl["Plugin"].value<std::string_view>();
+							auto formID = (*formIDTbl)["FormID"].value<RE::FormID>();
+							auto pluginName = (*formIDTbl)["Plugin"].value<std::string_view>();
+							if (!formID || !pluginName) {
+								logger::warn("Skipping body part data entry with invalid FormID or Plugin in {}", path.string());
+								continue;
+							}
 
 							auto bodyPartData = dataHandler->LookupForm<RE::BGSBodyPartData>(*formID, *pluginName);
 							if (bodyPartData) {
@@ -202,7 +129,11 @@ void Settings::ReadSettings()
 								if (attacksArr) {
 									for (auto&& attackEntry : *attacksArr) {
 										// read attack
-										auto& attackTbl = *attackEntry.as_table();
+										const auto* attackTable = readTable(attackEntry, "Attacks"sv);
+										if (!attackTable) {
+											continue;
+										}
+										const auto& attackTbl = *attackTable;
 
 										// read swing event
 										AttackDefinition::SwingEvent swingEvent = AttackDefinition::SwingEvent::kWeaponSwing;
@@ -228,14 +159,17 @@ void Settings::ReadSettings()
 										if (eventNames) {
 											for (auto& eventNameEntry : *eventNames) {
 												auto eventName = eventNameEntry.value<std::string_view>();
+												if (!eventName) {
+													logger::warn("Skipping attack event with invalid EventNames entry in {}", path.string());
+													continue;
+												}
 
 												// read collision
 												auto collisionArr = attackTbl["Collisions"].as_array();
 												if (collisionArr) {
 													std::vector<CollisionDefinition> collisionDefs{};
-
-													for (auto&& collisionEntry : *collisionArr) {
-														readCollision(*collisionEntry.as_table(), collisionDefs);
+													if (!readCollisionArray(*collisionArr, collisionDefs, "attack"sv)) {
+														continue;
 													}
 
 													switch (swingEvent) {
@@ -266,7 +200,11 @@ void Settings::ReadSettings()
 			auto attackAnimationDefinitionsArr = tbl.get_as<toml::array>("AttackAnimationDefinitions");
 			if (attackAnimationDefinitionsArr) {
 				for (auto&& elem : *attackAnimationDefinitionsArr) {
-					auto& attackAnimationDefinitionsTbl = *elem.as_table();
+					const auto* definitionsTable = readTable(elem, "AttackAnimationDefinitions"sv);
+					if (!definitionsTable) {
+						continue;
+					}
+					const auto& attackAnimationDefinitionsTbl = *definitionsTable;
 
 					auto projectNames = attackAnimationDefinitionsTbl["ProjectNames"].as_array();
 					if (projectNames) {
@@ -281,7 +219,11 @@ void Settings::ReadSettings()
 								if (attacksArr) {
 									for (auto&& attackEntry : *attacksArr) {
 										// read attack
-										auto& attackTbl = *attackEntry.as_table();
+										const auto* attackTable = readTable(attackEntry, "Attacks"sv);
+										if (!attackTable) {
+											continue;
+										}
+										const auto& attackTbl = *attackTable;
 
 										// animation file path
 										auto animationFilePath = attackTbl["AnimationFilePath"].value<std::string_view>();
@@ -314,9 +256,8 @@ void Settings::ReadSettings()
 											auto collisionArr = attackTbl["Collisions"].as_array();
 											if (collisionArr) {
 												std::vector<CollisionDefinition> collisionDefs{};
-
-												for (auto&& collisionEntry : *collisionArr) {
-													readCollision(*collisionEntry.as_table(), collisionDefs);
+												if (!readCollisionArray(*collisionArr, collisionDefs, "animation"sv)) {
+													continue;
 												}
 
 												switch (swingEvent) {
@@ -346,7 +287,11 @@ void Settings::ReadSettings()
 			auto trailDefinitionArr = tbl.get_as<toml::array>("TrailDefinition");
 			if (trailDefinitionArr) {
 				for (auto&& elem : *trailDefinitionArr) {
-					auto& trailDefinitionTbl = *elem.as_table();
+					const auto* trailTable = readTable(elem, "TrailDefinition"sv);
+					if (!trailTable) {
+						continue;
+					}
+					const auto& trailDefinitionTbl = *trailTable;
 
 					// priority
 					int32_t priority = 0;
@@ -363,7 +308,12 @@ void Settings::ReadSettings()
 					}
 
 					// conditions
-					auto& trailConditionsTbl = *trailDefinitionTbl["Conditions"].as_table();
+					const auto* conditionsTable = trailDefinitionTbl["Conditions"].as_table();
+					if (!conditionsTable) {
+						logger::warn("Skipping trail definition with invalid Conditions in {}", path.string());
+						continue;
+					}
+					const auto& trailConditionsTbl = *conditionsTable;
 
 					// weapon names
 					std::vector<std::string> weaponNames;
@@ -441,10 +391,18 @@ void Settings::ReadSettings()
 					auto effectShadersArr = trailConditionsTbl["EffectShaders"].as_array();
 					if (effectShadersArr) {
 						for (auto& effectShadersEntry : *effectShadersArr) {
-							auto& effectShaderTbl = *effectShadersEntry.as_table();
+							const auto* effectShaderTbl = effectShadersEntry.as_table();
+							if (!effectShaderTbl) {
+								logger::warn("Skipping effect shader entry with invalid table in {}", path.string());
+								continue;
+							}
 
-							auto formID = effectShaderTbl["FormID"].value<RE::FormID>();
-							auto pluginName = effectShaderTbl["Plugin"].value<std::string_view>();
+							auto formID = (*effectShaderTbl)["FormID"].value<RE::FormID>();
+							auto pluginName = (*effectShaderTbl)["Plugin"].value<std::string_view>();
+							if (!formID || !pluginName) {
+								logger::warn("Skipping effect shader entry with invalid FormID or Plugin in {}", path.string());
+								continue;
+							}
 
 							auto effectShader = dataHandler->LookupForm<RE::TESEffectShader>(*formID, *pluginName);
 							if (effectShader) {
@@ -458,37 +416,43 @@ void Settings::ReadSettings()
 						TrailOverride trailOverride{};
 
 						// visuals
-						auto& trailVisualsTbl = *trailDefinitionTbl["Visuals"].as_table();
+						const auto* visualsTable = trailDefinitionTbl["Visuals"].as_table();
+						if (!visualsTable) {
+							logger::warn("Skipping trail definition with invalid Visuals in {}", path.string());
+							continue;
+						}
+						const auto& trailVisualsTbl = *visualsTable;
 
 						// lifetime mult
 						trailOverride.lifetimeMult = trailVisualsTbl["LifetimeMult"].value<float>();
 
 						const auto fillColor = [&](const toml::table* a_table, RE::NiColorA& a_outColor) {
 							if (a_table) {
-								auto r = a_table->get("r");
-								if (r) {
-									a_outColor.red = *r->value<float>();
-								}
-								auto g = a_table->get("g");
-								if (g) {
-									a_outColor.green = *g->value<float>();
-								}
-								auto b = a_table->get("b");
-								if (b) {
-									a_outColor.blue = *b->value<float>();
-								}
-								auto a = a_table->get("a");
-								if (a) {
-									a_outColor.alpha = *a->value<float>();
-								}
+								const auto fillComponent = [&](std::string_view a_name, float& a_value) {
+									const auto* component = a_table->get(a_name);
+									if (!component) {
+										return true;
+									}
+									const auto value = component->value<float>();
+									if (!value) {
+										logger::warn("Skipping trail definition with invalid Visuals.{} component in {}", a_name, path.string());
+										return false;
+									}
+									a_value = *value;
+									return true;
+								};
+								return fillComponent("r", a_outColor.red) && fillComponent("g", a_outColor.green) && fillComponent("b", a_outColor.blue) && fillComponent("a", a_outColor.alpha);
 							}
+							return true;
 						};
 
 						// base color override
 						auto baseColorOverrideTbl = trailVisualsTbl["BaseColorOverride"].as_table();
 						if (baseColorOverrideTbl) {
 							trailOverride.baseColorOverride = RE::NiColorA();
-							fillColor(baseColorOverrideTbl, *trailOverride.baseColorOverride);
+							if (!fillColor(baseColorOverrideTbl, *trailOverride.baseColorOverride)) {
+								continue;
+							}
 						}
 
 						// base color scale mult
@@ -515,7 +479,11 @@ void Settings::ReadSettings()
 			auto attackEventPairArr = tbl.get_as<toml::array>("AttackEventPair");
 			if (attackEventPairArr) {
 				for (auto&& elem : *attackEventPairArr) {
-					auto& attackEventPairTbl = *elem.as_table();
+					const auto* eventTable = readTable(elem, "AttackEventPair"sv);
+					if (!eventTable) {
+						continue;
+					}
+					const auto& attackEventPairTbl = *eventTable;
 					auto rightEvent = attackEventPairTbl["RightEvent"].value<std::string_view>();
 					auto leftEvent = attackEventPairTbl["LeftEvent"].value<std::string_view>();
 					if (rightEvent && leftEvent) {
@@ -527,13 +495,21 @@ void Settings::ReadSettings()
 			auto weaponOverrideArr = tbl.get_as<toml::array>("WeaponOverride");
 			if (weaponOverrideArr) {
 				for (auto&& elem : *weaponOverrideArr) {
-					auto& weaponOverrideTbl = *elem.as_table();
+					const auto* weaponTable = readTable(elem, "WeaponOverride"sv);
+					if (!weaponTable) {
+						continue;
+					}
+					const auto& weaponOverrideTbl = *weaponTable;
 
 					auto weaponEntryTblPtr = weaponOverrideTbl.get_as<toml::table>("Weapon");
 					if (weaponEntryTblPtr) {
 						auto& weaponEntryTbl = *weaponEntryTblPtr;
 						auto formID = weaponEntryTbl["FormID"].value<RE::FormID>();
 						auto pluginName = weaponEntryTbl["Plugin"].value<std::string_view>();
+						if (!formID || !pluginName) {
+							logger::warn("Skipping weapon override with invalid FormID or Plugin in {}", path.string());
+							continue;
+						}
 
 						auto weapon = dataHandler->LookupForm<RE::TESObjectWEAP>(*formID, *pluginName);
 						if (weapon) {

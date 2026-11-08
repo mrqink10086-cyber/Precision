@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Settings.h"
+#include "TrailHistory.h"
 
 struct AttackTrail
 {
@@ -37,7 +38,7 @@ struct AttackTrail
 	RE::NiMatrix3 weaponRotation;
 	RE::NiTransform collisionNodeLocalTransform;
 
-	std::vector<RE::NiTransform> trailHistory;
+	Precision::TrailHistory<RE::NiTransform, 4> trailHistory;
 	std::deque<float> segmentTimestamps;
 
 private:
