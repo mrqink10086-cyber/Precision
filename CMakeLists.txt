@@ -32,3 +32,17 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 add_subdirectory(src)
 include(cmake/packaging.cmake)
+
+option(PRECISION_BUILD_TESTS "Build standalone runtime algorithm tests" OFF)
+if(PRECISION_BUILD_TESTS)
+	enable_testing()
+	add_executable(precision_runtime_tests tests/runtime_tests.cpp)
+	target_compile_features(precision_runtime_tests PRIVATE cxx_std_20)
+	target_include_directories(precision_runtime_tests PRIVATE src)
+	add_test(NAME precision_runtime_tests COMMAND precision_runtime_tests)
+	set_tests_properties(precision_runtime_tests PROPERTIES TIMEOUT 30)
+
+	add_executable(precision_runtime_bench EXCLUDE_FROM_ALL tests/runtime_bench.cpp)
+	target_compile_features(precision_runtime_bench PRIVATE cxx_std_20)
+	target_include_directories(precision_runtime_bench PRIVATE src)
+endif()

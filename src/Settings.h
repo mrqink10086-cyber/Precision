@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RuntimeAlgorithms.h"
+
 #include <Simpleini.h>
 #include <unordered_set>
 
@@ -47,7 +49,7 @@ struct TrailDefinition
 	TrailOverride trailOverride;
 };
 
-using ExtraDataCollections = std::unordered_map<std::string, std::string>;
+using ExtraDataCollections = std::unordered_map<std::string, std::string, RuntimeAlgorithms::TransparentStringHash, std::equal_to<>>;
 
 struct CollisionDefinition
 {

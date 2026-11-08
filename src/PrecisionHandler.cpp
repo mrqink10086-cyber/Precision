@@ -229,26 +229,12 @@ void PrecisionHandler::Update(float a_deltaTime)
 	}
 
 	// do pending hits
-	{
-		ReadLocker locker(pendingHitsLock);
-		for (auto& pendingHit : pendingHits) {
-			pendingHit.Run();
-		}
-	}
-
-	{
-		WriteLocker locker(pendingHitsLock);
-		pendingHits.clear();
-	}
+	RuntimeAlgorithms::ProcessAndClearLocked(pendingHits, pendingHitsLock, [](auto& a_hit) { a_hit.Run(); });
 
 	// update trails
-	for (auto it = _attackTrails.begin(); it != _attackTrails.end();) {
-		if (!it->get()->Update(a_deltaTime)) {
-			it = _attackTrails.erase(it);
-		} else {
-			++it;
-		}
-	}
+	RuntimeAlgorithms::ProcessRetained(_attackTrails, [a_deltaTime](const auto& a_trail) {
+		return !a_trail->Update(a_deltaTime);
+	});
 
 	if (bCameraShakeActive) {
 		if (currentCameraShakeTimer > 0.f) {
@@ -787,52 +773,28 @@ void PrecisionHandler::ProcessPrePhysicsStepJobs()
 {
 	WriteLocker locker(prePhysicsStepJobsLock);
 
-	for (auto it = _prePhysicsStepJobs.begin(); it != _prePhysicsStepJobs.end();) {
-		if (it->get()->Run()) {
-			it = _prePhysicsStepJobs.erase(it);
-		} else {
-			++it;
-		}
-	}
+	RuntimeAlgorithms::ProcessRetained(_prePhysicsStepJobs, [](const auto& a_job) { return a_job->Run(); });
 }
 
 void PrecisionHandler::ProcessMainUpdateJobs()
 {
 	WriteLocker locker(mainUpdateJobsLock);
 
-	for (auto it = _mainUpdateJobs.begin(); it != _mainUpdateJobs.end();) {
-		if (it->get()->Run()) {
-			it = _mainUpdateJobs.erase(it);
-		} else {
-			++it;
-		}
-	}
+	RuntimeAlgorithms::ProcessRetained(_mainUpdateJobs, [](const auto& a_job) { return a_job->Run(); });
 }
 
 void PrecisionHandler::ProcessPostHavokHitJobs()
 {
 	WriteLocker locker(postHavokHitJobsLock);
 
-	for (auto it = _postHavokHitJobs.begin(); it != _postHavokHitJobs.end();) {
-		if (it->get()->Run()) {
-			it = _postHavokHitJobs.erase(it);
-		} else {
-			++it;
-		}
-	}
+	RuntimeAlgorithms::ProcessRetained(_postHavokHitJobs, [](const auto& a_job) { return a_job->Run(); });
 }
 
 void PrecisionHandler::ProcessDelayedJobs(float a_deltaTime)
 {
 	WriteLocker locker(delayedJobsLock);
 
-	for (auto it = _delayedJobs.begin(); it != _delayedJobs.end();) {
-		if (it->get()->Run(a_deltaTime)) {
-			it = _delayedJobs.erase(it);
-		} else {
-			++it;
-		}
-	}
+	RuntimeAlgorithms::ProcessRetained(_delayedJobs, [a_deltaTime](const auto& a_job) { return a_job->Run(a_deltaTime); });
 }
 
 bool PrecisionHandler::GetAttackCollisionDefinition(RE::Actor* a_actor, AttackDefinition& a_outAttackDefinition, std::optional<bool> a_bIsLeftSwing /*= std::nullopt*/, AttackDefinition::SwingEvent a_swingEvent /*= AttackDefinition::SwingEvent::kWeaponSwing*/) const
@@ -960,7 +922,7 @@ bool PrecisionHandler::ParseCollisionEvent(const RE::BSAnimationGraphEvent* a_ev
 {
 	auto& payload = a_event->payload;
 
-	auto parameters = Utils::Tokenize(payload.c_str(), '|');
+	auto parameters = RuntimeAlgorithms::TokenRange(payload.c_str(), '|');
 
 	if (parameters.empty()) {
 		logger::error("Invalid collision event: {}", a_event->tag.data());
@@ -1046,7 +1008,7 @@ bool PrecisionHandler::ParseCollisionEvent(const RE::BSAnimationGraphEvent* a_ev
 	};
 
 	// parse optional parameters
-	for (auto& parameter : parameters) {
+	for (auto parameter : parameters) {
 		auto nameEnd = parameter.find('(');
 		auto parameterName = parameter.substr(0, nameEnd);
 
@@ -1274,7 +1236,7 @@ bool PrecisionHandler::ParseCollisionEvent(const RE::BSAnimationGraphEvent* a_ev
 			}
 		default:
 			{
-				WriteLocker locker(extraParameterNamesLock);
+				ReadLocker locker(extraParameterNamesLock);
 				if (_extraParameterNames.contains(parameterName)) {
 					std::string_view parsedString;
 					if (parseStringParameter(parameter, parsedString)) {
@@ -1638,7 +1600,7 @@ RE::ObjectRefHandle PrecisionHandler::CacheHitData(PrecisionHitData a_hitData, E
 	if (a_hitData.target) {
 		auto refHandle = a_hitData.target->GetHandle();
 		if (refHandle) {
-			cachedHitDataMap[refHandle] = CachedHitData{ a_hitData, a_extraData };
+			cachedHitDataMap[refHandle] = CachedHitData{ a_hitData, std::move(a_extraData) };
 			return refHandle;
 		}
 	}
@@ -1674,7 +1636,7 @@ bool PrecisionHandler::CopyCachedExtraData(RE::ObjectRefHandle a_refHandle, std:
 		return false;
 	}
 	const auto& extraData = hit->second.second;
-	auto value = extraData.find(std::string(a_key));
+	auto value = extraData.find(a_key);
 	if (value == extraData.end()) {
 		return false;
 	}
