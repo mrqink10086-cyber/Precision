@@ -381,7 +381,7 @@ namespace PRECISION_API
 		/// Get cached PrecisionHitData from target actor.
 		/// </summary>
 		/// <param name="a_refHandle">Target actor handle</param>
-		/// <returns>Thread-local snapshot, valid until the next successful GetCachedHitData call on this thread or thread exit; or nullptr. Game-object pointers remain borrowed.</returns>
+		/// <returns>Thread-local snapshot, valid until the next successful GetCachedHitData call on this thread or thread exit; or nullptr. All pointer fields are borrowed and can expire independently.</returns>
 		virtual PrecisionHitData* GetCachedHitData(RE::ObjectRefHandle a_refHandle) noexcept = 0;
 
 		/// <summary>
