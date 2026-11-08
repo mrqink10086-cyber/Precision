@@ -1,0 +1,15 @@
+{
+  "name": "precision",
+  "version": "2",
+  "dependencies": [
+    "directxtk",
+    "fmt",
+    "rapidcsv",
+    "rsm-binary-io",
+    "simpleini",
+    "spdlog",
+    "tomlplusplus",
+    "xbyak"
+  ],
+  "builtin-baseline": "a7d99a5c3cd1456af023051d025a5643a2d6e79c"
+}
