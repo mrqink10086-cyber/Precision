@@ -56,7 +56,7 @@ bool Blender::Update(const struct ActiveRagdoll& a_ragdoll, [[maybe_unused]] con
 
 	//int32_t numTracks = a_inOut.tracks->masterHeader.numTracks;
 
-	TrackHeader* poseHeader = GetTrackHeader(a_inOut, RE::hkbGeneratorOutput::StandardTracks::TRACK_POSE);
+	TrackHeader* poseHeader = GetTrackHeader(a_inOut, RE::hkbGeneratorOutput::StandardTracks::kPose);
 	if (poseHeader && poseHeader->onFraction > 0.f) {
 		//int numPoses = poseHeader->numData;
 		RE::hkQsTransform* poseOut = (RE::hkQsTransform*)Track_getData(a_inOut, *poseHeader);

@@ -1049,6 +1049,7 @@ bool PrecisionHandler::ParseCollisionEvent(const RE::BSAnimationGraphEvent* a_ev
 	for (auto& parameter : parameters) {
 		auto nameEnd = parameter.find('(');
 		auto parameterName = parameter.substr(0, nameEnd);
+
 		switch (hash(parameterName.data(), parameterName.size())) {
 		case "node"_h:
 			{
@@ -1270,6 +1271,19 @@ bool PrecisionHandler::ParseCollisionEvent(const RE::BSAnimationGraphEvent* a_ev
 					return false;
 				}
 				break;
+			}
+		default:
+			{
+				WriteLocker locker(extraParameterNamesLock);
+				if (_extraParameterNames.contains(parameterName)) {
+					std::string_view parsedString;
+					if (parseStringParameter(parameter, parsedString)) {
+						a_outCollisionDefinition.extraDataMap.emplace(std::make_pair(parameterName, parsedString));
+					} else {
+						logger::error("Invalid {} event payload - extra data could not be parsed - {}.{}", a_event->tag.data(), a_event->tag.data(), a_event->payload.data());
+						return false;
+					}
+				}
 			}
 		}
 	}
@@ -1617,6 +1631,57 @@ bool PrecisionHandler::TryGetCachedWeaponMeshReach(RE::Actor* a_actor, RE::TESOb
 	return false;
 }
 
+RE::ObjectRefHandle PrecisionHandler::CacheHitData(PrecisionHitData a_hitData, ExtraDataCollections a_extraData)
+{
+	WriteLocker locker(cachedHitDataLock);
+
+	if (a_hitData.target) {
+		auto refHandle = a_hitData.target->GetHandle();
+		if (refHandle) {
+			cachedHitDataMap[refHandle] = CachedHitData{ a_hitData, a_extraData };
+			return refHandle;
+		}
+	}
+
+	return RE::ObjectRefHandle{};
+}
+
+void PrecisionHandler::RemoveCachedHitData(RE::ObjectRefHandle a_refHandle)
+{
+	WriteLocker locker(cachedHitDataLock);
+
+	if (a_refHandle) {
+		cachedHitDataMap.erase(a_refHandle);
+	}
+}
+
+bool PrecisionHandler::CopyCachedHitData(RE::ObjectRefHandle a_refHandle, PrecisionHitData& a_data)
+{
+	ReadLocker locker(cachedHitDataLock);
+	auto it = cachedHitDataMap.find(a_refHandle);
+	if (it == cachedHitDataMap.end()) {
+		return false;
+	}
+	a_data = it->second.first;
+	return true;
+}
+
+bool PrecisionHandler::CopyCachedExtraData(RE::ObjectRefHandle a_refHandle, std::string_view a_key, std::string& a_data)
+{
+	ReadLocker locker(cachedHitDataLock);
+	auto hit = cachedHitDataMap.find(a_refHandle);
+	if (hit == cachedHitDataMap.end()) {
+		return false;
+	}
+	const auto& extraData = hit->second.second;
+	auto value = extraData.find(std::string(a_key));
+	if (value == extraData.end()) {
+		return false;
+	}
+	a_data = value->second;
+	return true;
+}
+
 RE::NiPointer<RE::BGSAttackData>& PrecisionHandler::GetOppositeAttackEvent(RE::NiPointer<RE::BGSAttackData>& a_attackData, RE::BGSAttackDataMap* attackDataMap)
 {
 	if (!attackDataMap || !a_attackData) {
@@ -1815,6 +1880,17 @@ bool PrecisionHandler::RemovePrecisionLayerSetupCallback(SKSE::PluginHandle a_pl
 	return precisionLayerSetupCallbacks.erase(a_pluginHandle);
 }
 
+bool PrecisionHandler::AddExtraParameterName(const std::string_view a_name)
+{
+	WriteLocker locker(extraParameterNamesLock);
+
+	if (_extraParameterNames.contains(a_name))
+		return false;
+
+	_extraParameterNames.emplace(a_name);
+	return true;
+}
+
 float PrecisionHandler::GetAttackCollisionReach(RE::ActorHandle a_actorHandle, RequestedAttackCollisionType a_collisionType /*= RequestedAttackCollisionType::Default*/) const
 {
 	float length = 0.f;
@@ -1870,8 +1946,8 @@ float PrecisionHandler::GetAttackCollisionReach(RE::ActorHandle a_actorHandle, R
 
 				if (auto niAVObject = actor->GetNodeByName(bIsLeftWeapon ? "WEAPON"sv : "SHIELD"sv)) {
 					auto node = niAVObject->AsNode();
-					if (node && node->children.size() > 0 && node->children[0]) {
-						weaponNode = node->children[0].get();
+					if (node && node->GetChildren().size() > 0 && node->GetChildren()[0]) {
+						weaponNode = node->GetChildren()[0].get();
 					}
 				}
 

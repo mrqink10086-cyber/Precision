@@ -220,4 +220,48 @@ namespace Messaging
 		bool bAttackerIsPlayer = a_sourceActorHandle.native_handle() == 0x100000;
 		PrecisionHandler::GetSingleton()->ApplyHitImpulse(a_targetActorHandle, a_rigidBody, a_hitVelocity, a_hitPosition, a_impulseMult, true, bAttackerIsPlayer);
 	}
+
+	APIResult PrecisionInterface::AddExtraParameterName(const char* a_name) noexcept
+	{
+		if (a_name) {
+			try {
+				if (PrecisionHandler::GetSingleton()->AddExtraParameterName(a_name)) {
+					return APIResult::OK;
+				}
+			} catch (const std::bad_alloc&) {}
+		}
+		return APIResult::NotRegistered;
+	}
+
+	PrecisionHitData* PrecisionInterface::GetCachedHitData(RE::ObjectRefHandle a_refHandle) noexcept
+	{
+		if (!a_refHandle) {
+			return nullptr;
+		}
+
+		thread_local PrecisionHitData snapshot{};
+		return PrecisionHandler::CopyCachedHitData(a_refHandle, snapshot) ? std::addressof(snapshot) : nullptr;
+	}
+
+	const char* PrecisionInterface::GetCachedExtraData(RE::ObjectRefHandle a_refHandle, const char* a_key) noexcept
+	{
+		if (!a_refHandle || !a_key) {
+			return nullptr;
+		}
+		thread_local std::string snapshot;
+		try {
+			return PrecisionHandler::CopyCachedExtraData(a_refHandle, a_key, snapshot) ? snapshot.c_str() : nullptr;
+		} catch (const std::bad_alloc&) {
+			return nullptr;
+		}
+	}
+
+	const char* PrecisionInterface::GetCachedExtraData(PrecisionHitData* a_hitData, const char* a_key) noexcept
+	{
+		if (!a_hitData || !a_hitData->target) {
+			return nullptr;
+		}
+
+		return GetCachedExtraData(a_hitData->target->GetHandle(), a_key);
+	}
 }

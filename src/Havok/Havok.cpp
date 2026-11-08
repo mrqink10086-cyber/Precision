@@ -2,6 +2,19 @@
 
 #include "Offsets.h"
 
+RE::hkRagdollConstraintCinfo::hkRagdollConstraintCinfo()
+{
+	SKSE::stl::emplace_vtable(this);
+}
+
+void RE::hkConstraintCinfo::CreateConstraintData()
+{
+	// CommonLib declares this virtual but does not provide its engine implementation.
+	static REL::Relocation<const uintptr_t*> vtable{ RE::VTABLE_hkConstraintCinfo[0] };
+	using func_t = void (*)(RE::hkConstraintCinfo*);
+	reinterpret_cast<func_t>(vtable.get()[1])(this);
+}
+
 RE::hkConstraintCinfo::~hkConstraintCinfo()
 {
 	hkConstraintCinfo_setConstraintData(this, nullptr);
@@ -52,7 +65,7 @@ RE::hkMemoryRouter& hkGetMemoryRouter()
 RE::bhkRagdollConstraint* bhkRagdolConstraint_ctor(RE::bhkRagdollConstraint* a_this, [[maybe_unused]] RE::hkConstraintCinfo* a_cInfo)
 {
 	bhkRefObject_ctor(a_this);
-	a_this->serializable = nullptr;
+	a_this->cinfo = nullptr;
 
 	SKSE::stl::atomic_ref bhkSerializableCount{ *GetBhkSerializableCount() };
 	++bhkSerializableCount;

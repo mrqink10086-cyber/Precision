@@ -8,6 +8,7 @@ namespace Messaging
 	using InterfaceVersion2 = ::PRECISION_API::IVPrecision2;
 	using InterfaceVersion3 = ::PRECISION_API::IVPrecision3;
 	using InterfaceVersion4 = ::PRECISION_API::IVPrecision4;
+	using InterfaceVersion5 = ::PRECISION_API::IVPrecision5;
 	using PreHitCallback = ::PRECISION_API::PreHitCallback;
 	using PostHitCallback = ::PRECISION_API::PostHitCallback;
 	using PrePhysicsStepCallback = ::PRECISION_API::PrePhysicsStepCallback;
@@ -18,8 +19,9 @@ namespace Messaging
 	using CollisionFilterSetupCallback = ::PRECISION_API::CollisionFilterSetupCallback;
 	using ContactListenerCallback = ::PRECISION_API::ContactListenerCallback;
 	using PrecisionLayerSetupCallback = ::PRECISION_API::PrecisionLayerSetupCallback;
+	using PrecisionHitData = ::PRECISION_API::PrecisionHitData;
 
-	class PrecisionInterface : public InterfaceVersion4
+	class PrecisionInterface : public InterfaceVersion5
 	{
 	private:
 		PrecisionInterface() = default;
@@ -73,5 +75,11 @@ namespace Messaging
 		RE::NiAVObject* GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::NiAVObject* a_node) noexcept override;
 		RE::hkpRigidBody* GetOriginalFromClone(RE::ActorHandle a_actorHandle, RE::hkpRigidBody* a_hkpRigidBody) noexcept override;
 		virtual void ApplyHitImpulse2(RE::ActorHandle a_targetActorHandle, RE::ActorHandle a_sourceActorHandle, RE::hkpRigidBody* a_rigidBody, const RE::NiPoint3& a_hitVelocity, const RE::hkVector4& a_hitPosition, float a_impulseMult) noexcept override;
+
+		// InterfaceVersion5
+		virtual APIResult AddExtraParameterName(const char* a_name) noexcept override;
+		virtual PrecisionHitData* GetCachedHitData(RE::ObjectRefHandle a_refHandle) noexcept override;
+		virtual const char* GetCachedExtraData(RE::ObjectRefHandle a_refHandle, const char* a_key) noexcept override;
+		virtual const char* GetCachedExtraData(PrecisionHitData* a_hitData, const char* a_key) noexcept override;
 	};
 }

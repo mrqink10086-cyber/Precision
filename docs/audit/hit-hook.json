@@ -1,0 +1,30 @@
+[
+  {
+    "runtime": "1.5.97",
+    "executable_sha256": "de92095a18513fcaffe5a86fd72879d3350c61cdcdb8500b7d31df2bae9579cd",
+    "call_id": 37673,
+    "offset": "0x3c0",
+    "rva": "0x628fe0",
+    "bytes": "e81bd4ffff",
+    "target_id": 37633,
+    "target_rva": "0x626400",
+    "base_cinfo_vtable_id": 242513,
+    "base_cinfo_slot": 1,
+    "base_cinfo_target_rva": "0xde9570",
+    "base_cinfo_target_bytes": "40574883ec3048c7"
+  },
+  {
+    "runtime": "1.6.1170",
+    "executable_sha256": "80c1ea737d33c6bfac09b101b8d77ab0f9f6630128c3ed052f9d945bed54e7e4",
+    "call_id": 38627,
+    "offset": "0x4a8",
+    "rva": "0x6bad18",
+    "bytes": "e8a3ceffff",
+    "target_id": 38586,
+    "target_rva": "0x6b7bc0",
+    "base_cinfo_vtable_id": 196180,
+    "base_cinfo_slot": 1,
+    "base_cinfo_target_rva": "0xecb360",
+    "base_cinfo_target_bytes": "40574883ec3048c7"
+  }
+]

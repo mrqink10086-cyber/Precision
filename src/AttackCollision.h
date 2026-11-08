@@ -23,6 +23,8 @@ struct AttackCollision
 	float capsuleLength = 0.f;
 	float visualWeaponLength = 0.f;
 
+	ExtraDataCollections extraDataMap;
+
 	bool Add(const CollisionDefinition& a_collisionDefinition);
 	bool Remove();
 	bool RemoveRecoilCollision();

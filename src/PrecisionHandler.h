@@ -166,6 +166,12 @@ public:
 	static bool GetCachedWeaponMeshReach(RE::TESObjectWEAP* a_weapon, float& a_outReach);
 	static bool TryGetCachedWeaponMeshReach(RE::Actor* a_actor, RE::TESObjectWEAP* a_weapon, float& a_outReach);
 
+	using CachedHitData = std::pair<PrecisionHitData, ExtraDataCollections>;
+	static RE::ObjectRefHandle CacheHitData(PrecisionHitData a_hitData, ExtraDataCollections a_extraData);
+	static void RemoveCachedHitData(RE::ObjectRefHandle a_refHandle);
+	static bool CopyCachedHitData(RE::ObjectRefHandle a_refHandle, PrecisionHitData& a_data);
+	static bool CopyCachedExtraData(RE::ObjectRefHandle a_refHandle, std::string_view a_key, std::string& a_data);
+
 	static inline ContactListener contactListener{};
 
 	static inline Lock activeActorsLock;
@@ -197,7 +203,10 @@ public:
 	static inline std::unordered_set<RE::ActorHandle> ragdollsToRemove{};
 
 	static inline Lock weaponMeshLengthLock;
-	static inline std::unordered_map<RE::TESObjectWEAP*, float> weaponMeshLengthMap;
+	static inline std::unordered_map<RE::TESObjectWEAP*, float> weaponMeshLengthMap{};
+
+	static inline Lock cachedHitDataLock;
+	static inline std::unordered_map<RE::ObjectRefHandle, std::pair<PrecisionHitData, ExtraDataCollections>> cachedHitDataMap{};
 
 	static inline float bCameraShakeActive = false;
 	static inline float currentCameraShake = 0.f;
@@ -228,6 +237,8 @@ public:
 	bool RemoveCollisionFilterSetupCallback(SKSE::PluginHandle a_pluginHandle);
 	bool RemoveContactListenerCallback(SKSE::PluginHandle a_pluginHandle);
 	bool RemovePrecisionLayerSetupCallback(SKSE::PluginHandle a_pluginHandle);
+
+	bool AddExtraParameterName(const std::string_view a_name);
 
 	[[nodiscard]] float GetAttackCollisionReach(RE::ActorHandle a_actorHandle, RequestedAttackCollisionType a_collisionType = RequestedAttackCollisionType::Default) const;
 
@@ -488,6 +499,14 @@ private:
 	std::unordered_map<SKSE::PluginHandle, CollisionFilterSetupCallback> collisionFilterSetupCallbacks;
 	std::unordered_map<SKSE::PluginHandle, ContactListenerCallback> contactListenerCallbacks;
 	std::unordered_map<SKSE::PluginHandle, PrecisionLayerSetupCallback> precisionLayerSetupCallbacks;
+
+	mutable Lock extraParameterNamesLock;
+	struct ParameterNameHash
+	{
+		using is_transparent = void;
+		std::size_t operator()(std::string_view a_name) const noexcept { return std::hash<std::string_view>{}(a_name); }
+	};
+	std::unordered_set<std::string, ParameterNameHash, std::equal_to<>> _extraParameterNames;
 
 	mutable Lock prePhysicsStepJobsLock;
 	std::vector<std::unique_ptr<GenericJob>> _prePhysicsStepJobs;

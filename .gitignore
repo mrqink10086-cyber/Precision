@@ -1,4 +1,6 @@
 # Created by https://www.toptal.com/developers/gitignore/api/cmake,visualstudio
+/build/
+/dist/
 # Edit at https://www.toptal.com/developers/gitignore?templates=cmake,visualstudio
 
 ### CMake ###

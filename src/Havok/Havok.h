@@ -22,87 +22,6 @@ namespace RE
 	//	const char* name;
 	//};
 
-	struct hkbGeneratorOutput
-	{
-		enum class StandardTracks
-		{
-			TRACK_WORLD_FROM_MODEL,                       // 00
-			TRACK_EXTRACTED_MOTION,                       // 01
-			TRACK_POSE,                                   // 02
-			TRACK_FLOAT_SLOTS,                            // 03
-			TRACK_RIGID_BODY_RAGDOLL_CONTROLS,            // 04
-			TRACK_RIGID_BODY_RAGDOLL_BLEND_TIME,          // 05
-			TRACK_POWERED_RAGDOLL_CONTROLS,               // 06
-			TRACK_POWERED_RAGDOLL_WORLD_FROM_MODEL_MODE,  // 07
-			TRACK_KEYFRAMED_RAGDOLL_BONES,                // 08
-			TRACK_KEYFRAME_TARGETS,                       // 09
-			TRACK_ANIMATION_BLEND_FRACTION,               // 0A
-			TRACK_ATTRIBUTES,                             // 0B
-			TRACK_FOOT_IK_CONTROLS,                       // 0C
-			TRACK_CHARACTER_CONTROLLER_CONTROLS,          // 0D
-			TRACK_HAND_IK_CONTROLS_0,                     // 0E
-			TRACK_HAND_IK_CONTROLS_1,                     // 0F
-			TRACK_HAND_IK_CONTROLS_2,                     // 10
-			TRACK_HAND_IK_CONTROLS_3,                     // 11
-			TRACK_HAND_IK_CONTROLS_NON_BLENDABLE_0,       // 12
-			TRACK_HAND_IK_CONTROLS_NON_BLENDABLE_1,       // 13
-			TRACK_HAND_IK_CONTROLS_NON_BLENDABLE_2,       // 14
-			TRACK_HAND_IK_CONTROLS_NON_BLENDABLE_3,       // 15
-			TRACK_DOCKING_CONTROLS,                       // 16
-			TRACK_AI_CONTROL_CONTROLS_BLENDABLE,          // 17
-			TRACK_AI_CONTROL_CONTROLS_NON_BLENDABLE,      // 18
-			NUM_STANDARD_TRACKS,                          // 19
-		};
-
-		enum class TrackTypes
-		{
-			TRACK_TYPE_REAL,         // 0
-			TRACK_TYPE_QSTRANSFORM,  // 1
-			TRACK_TYPE_BINARY,       // 2
-		};
-
-		enum class TrackFlags
-		{
-			TRACK_FLAG_ADDITIVE_POSE = 1,
-			TRACK_FLAG_PALETTE = 1 << 1,
-			TRACK_FLAG_SPARSE = 1 << 2,
-		};
-
-		struct TrackHeader
-		{
-			int16_t capacity;                            // 00
-			int16_t numData;                             // 02
-			int16_t dataOffset;                          // 04
-			int16_t elementSizeBytes;                    // 06
-			float onFraction;                            // 08
-			stl::enumeration<TrackFlags, int8_t> flags;  // 0C
-			stl::enumeration<TrackTypes, int8_t> type;   // 0D
-		};
-		static_assert(sizeof(TrackHeader) == 0x10);
-
-		struct TrackMasterHeader
-		{
-			int32_t numBytes;   // 00
-			int32_t numTracks;  // 04
-			int8_t unused[8];   // 08
-		};
-
-		struct Tracks
-		{
-			struct TrackMasterHeader masterHeader;  // 00
-			struct TrackHeader trackHeaders[1];     // 10
-		};
-
-		struct Track
-		{
-			TrackHeader* header;  // 00
-			float* data;          // 08
-		};
-
-		struct Tracks* tracks;  // 00
-		bool deleteTracks;      // 08
-	};
-
 	class hkaKeyFrameHierarchyUtility
 	{
 	public:
@@ -135,32 +54,6 @@ namespace RE
 				snapMaxLinearDistance(0.03f),
 				snapMaxAngularDistance(0.1f) {}
 		};
-	};
-
-	struct hkbPoweredRagdollControlData
-	{
-		float maxForce = 50.f;                     // 00
-		float tau = 0.8f;                          // 04
-		float damping = 1.f;                       // 08
-		float proportionalRecoveryVelocity = 2.f;  // 0C
-		float constantRecoveryVelocity = 1.f;      // 10
-	};
-
-	struct hkbWorldFromModelModeData
-	{
-		enum class WorldFromModelMode : uint8_t
-		{
-			WORLD_FROM_MODEL_MODE_USE_OLD,        // 0
-			WORLD_FROM_MODEL_MODE_USE_INPUT,      // 1
-			WORLD_FROM_MODEL_MODE_COMPUTE,        // 2
-			WORLD_FROM_MODEL_MODE_NONE,           // 3
-			WORLD_FROM_MODEL_MODE_USE_ROOT_BONE,  // 4
-		};
-
-		int16_t poseMatchingBone0;  // 00
-		int16_t poseMatchingBone1;  // 02
-		int16_t poseMatchingBone2;  // 04
-		WorldFromModelMode mode;    // 06
 	};
 
 	//class hkbEventInfo
@@ -251,47 +144,6 @@ namespace RE
 	};
 	static_assert(offsetof(BShkbAnimationGraph_UpdateData, unk2A) == 0x2A);
 	static_assert(offsetof(BShkbAnimationGraph_UpdateData, scale1) == 0x30);
-
-	class bhkConstraint : public bhkSerializable
-	{
-	public:
-		inline static constexpr auto RTTI = RTTI_bhkConstraint;
-		inline static constexpr auto Ni_RTTI = NiRTTI_bhkConstraint;
-
-		~bhkConstraint() override;  // 00
-	};
-	static_assert(sizeof(bhkConstraint) == 0x20);
-
-	class bhkRagdollConstraint : public bhkConstraint
-	{
-	public:
-		inline static constexpr auto RTTI = RTTI_bhkRagdollConstraint;
-		inline static constexpr auto Ni_RTTI = NiRTTI_bhkRagdollConstraint;
-		inline static constexpr auto VTABLE = VTABLE_bhkRagdollConstraint;
-
-		~bhkRagdollConstraint() override;  // 00
-	};
-	static_assert(sizeof(bhkRagdollConstraint) == 0x20);
-
-	struct hkConstraintCinfo
-	{
-		~hkConstraintCinfo();
-
-		void* vtbl = 0;                                            // 00
-		RE::hkRefPtr<hkpConstraintData> constraintData = nullptr;  // 08
-		uint32_t unk10 = 0;
-		uint32_t unk14 = 0;
-		hkpRigidBody* rigidBodyA = nullptr;  // 18
-		hkpRigidBody* rigidBodyB = nullptr;  // 20
-	};
-
-	struct hkRagdollConstraintCinfo : hkConstraintCinfo
-	{
-		hkRagdollConstraintCinfo()
-		{
-			this->vtbl = (void*)RE::VTABLE_hkRagdollConstraintCinfo[0].address();
-		}
-	};
 
 	//class hkMemoryRouter
 	//{
@@ -384,22 +236,6 @@ namespace RE
 		bool forceCollideOntoPpu;                                                // D3
 	};
 	static_assert(sizeof(hkpRigidBodyCinfo) == 0xE0);
-
-	struct bhkRigidBodyCinfo
-	{
-		uint32_t collisionFilterInfo;  // 00 - initd to 0
-		hkpShape* shape;               // 08 - initd to 0
-		uint8_t unk10;                 // initd to 1
-		uint64_t unk18;                // initd to 0
-		uint32_t unk20;                // initd to 0
-		float unk24;                   // initd to -0
-		uint8_t unk28;                 // initd to 1
-		uint16_t unk2A;                // initd to -1 - quality type?
-		hkpRigidBodyCinfo hkCinfo;     // 30 - size == 0xE0
-	};
-	static_assert(offsetof(bhkRigidBodyCinfo, shape) == 0x08);
-	static_assert(offsetof(bhkRigidBodyCinfo, hkCinfo) == 0x30);
-	static_assert(sizeof(bhkRigidBodyCinfo) == 0x110);
 
 	//class hkpSolverResults
 	//{
@@ -513,21 +349,9 @@ namespace RE
 
 	using NodeList = hkArray<hkbNodeInfo>;
 
-	class bhkBlendCollisionObject : public bhkCollisionObject
-	{
-	public:
-		inline static constexpr auto RTTI = RTTI_bhkBlendCollisionObject;
-		inline static auto Ni_RTTI = NiRTTI_bhkBlendCollisionObject;
-
-		~bhkBlendCollisionObject() override;  // 00
-
-		float blendStrength;               // 28 - this affects how intensely to go from rigidBody position to node position. 0 means strictly follow rigidbody, 1 means strictly follow node.
-		float unk2C;                       // 2C
-		hkpMotion::MotionType motionType;  // 30
-		bhkWorld* world;                   // 38
-		uint32_t unk40;                    // 40
-	};
-	static_assert(sizeof(bhkBlendCollisionObject) == 0x48);
+	static_assert(sizeof(hkbGeneratorOutput) == 0x10);
+	static_assert(sizeof(hkbPoweredRagdollControlData) == 0x14);
+	static_assert(sizeof(hkConstraintCinfo) == 0x28);
 
 	//class bhkRigidBodyT : public bhkRigidBody
 	//{

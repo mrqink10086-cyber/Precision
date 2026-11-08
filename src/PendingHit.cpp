@@ -7,6 +7,8 @@
 
 void PendingHit::Run()
 {
+	using namespace PRECISION_API;
+
 	if (bOnlyFX) {
 		RunFXOnly();
 		return;
@@ -44,7 +46,7 @@ void PendingHit::Run()
 		}
 	}
 
-	PRECISION_API::PrecisionHitData precisionHitData(attacker.get(), target.get(), originalHitRigidBody, hittingRigidBody, niHitPos, niSeparatingNormal, niHitVelocity, hitBodyShapeKey, hittingBodyShapeKey);
+	PrecisionHitData precisionHitData(attacker.get(), target.get(), originalHitRigidBody, hittingRigidBody, niHitPos, niSeparatingNormal, niHitVelocity, hitBodyShapeKey, hittingBodyShapeKey);
 
 	// run pre hit callbacks
 	if (precisionHandler->preHitCallbacks.size() > 0) {
@@ -73,6 +75,8 @@ void PendingHit::Run()
 			}
 		}
 	}
+
+	auto cachedHitRefHandle = PrecisionHandler::CacheHitData(precisionHitData, attackCollision->extraDataMap);
 
 	// add modifiers from the attack collision
 	damageMultiplicative += attackCollision->damageMult - multiplicativeBias;
@@ -125,86 +129,6 @@ void PendingHit::Run()
 	if (Settings::bDebug && Settings::bDisplayHitLocations) {
 		const glm::vec4 red{ 1.0, 0.0, 0.0, 1.0 };
 		DrawHandler::AddPoint(niHitPos, 1.f, red);
-	}
-
-	// do hitstop and hitstop camera shake
-	if (Settings::bEnableHitstop || (Settings::bEnableHitstopCameraShake && attacker->IsPlayerRef())) {
-		//uint32_t hitCount = targetActor ? attackCollision->GetHitNPCCount() : attackCollision->GetHitCount();
-		uint32_t hitCount = targetActor ? precisionHandler->GetHitNPCCount(attackerHandle) : precisionHandler->GetHitCount(attackerHandle);
-
-		bool bIsActorAlive = targetActor ? !targetActor->IsDead() : false;
-		bool bIsPowerAttack = false;
-		bool bIsTwoHanded = false;
-
-		auto& attackData = attacker->GetActorRuntimeData().currentProcess->high->attackData;
-		if (attackData && attackData->data.flags.any(RE::AttackData::AttackFlag::kPowerAttack)) {
-			bIsPowerAttack = true;
-		}
-
-		if (auto attackingObject = attacker->GetAttackingWeapon()) {
-			if (auto attackingWeapon = attackingObject->object->As<RE::TESObjectWEAP>()) {
-				if (attackingWeapon->GetWeaponType() == RE::WEAPON_TYPE::kTwoHandAxe || attackingWeapon->GetWeaponType() == RE::WEAPON_TYPE::kTwoHandSword) {
-					bIsTwoHanded = true;
-				}
-			}
-		}
-
-		float feetPosition = attacker->GetPositionZ();
-
-		if (Settings::bEnableHitstop) {
-			// skip hitstop if not hitting an actor and contact point is close to feet level
-			if (targetActor || fabs(feetPosition - niHitPos.z) >= Settings::fGroundFeetDistanceThreshold) {
-				float diminishingReturnsMultiplier = pow(Settings::fHitstopDurationDiminishingReturnsFactor, hitCount - 1);
-
-				float hitstopLength = (bIsActorAlive ? Settings::fHitstopDurationNPC : Settings::fHitstopDurationOther) * diminishingReturnsMultiplier;
-
-				if (bIsPowerAttack) {
-					hitstopLength *= Settings::fHitstopDurationPowerAttackMultiplier;
-				}
-
-				if (bIsTwoHanded) {
-					hitstopLength *= Settings::fHitstopDurationTwoHandedMultiplier;
-				}
-
-				PrecisionHandler::AddHitstop(attackerHandle, hitstopLength, false);
-				if (Settings::bApplyHitstopToTarget && targetActor) {
-					// don't apply to the player in first person because it feels weird
-					bool bIsPlayer = targetActor->IsPlayerRef();
-					bool bIsFirstPerson = bIsPlayer && Utils::IsFirstPerson();
-
-					if (!bIsFirstPerson) {
-						PrecisionHandler::AddHitstop(targetActor->GetHandle(), hitstopLength, true);
-					}
-				}
-			}
-		}
-
-		if (Settings::bEnableHitstopCameraShake && attacker->IsPlayerRef()) {
-			/*RE::NiPoint3 niHitPos = Utils::HkVectorToNiPoint(hkHitPos) * *g_worldScaleInverse;
-			ApplyCameraShake(targetActor ? Settings::fHitstopCameraShakeStrengthNPC : Settings::fHitstopCameraShakeStrengthOther, niHitPos, Settings::fHitstopCameraShakeLength);*/
-
-			//*g_currentCameraShakeStrength = targetActor ? Settings::fHitstopCameraShakeStrengthNPC : Settings::fHitstopCameraShakeStrengthOther;
-
-			// skip camera shake if not hitting an actor and contact point is close to feet level
-			if (targetActor || fabs(feetPosition - niHitPos.z) >= Settings::fGroundFeetDistanceThreshold) {
-				float diminishingReturnsMultiplier = pow(Settings::fHitstopCameraShakeDurationDiminishingReturnsFactor, hitCount - 1);
-
-				float cameraShakeLength = (bIsActorAlive ? Settings::fHitstopCameraShakeDurationNPC : Settings::fHitstopCameraShakeDurationOther) * diminishingReturnsMultiplier;
-				float cameraShakeStrength = (bIsActorAlive ? Settings::fHitstopCameraShakeStrengthNPC : Settings::fHitstopCameraShakeStrengthOther) * diminishingReturnsMultiplier;
-
-				if (bIsPowerAttack) {
-					cameraShakeStrength *= Settings::fHitstopCameraShakePowerAttackMultiplier;
-					cameraShakeLength *= Settings::fHitstopCameraShakePowerAttackMultiplier;
-				}
-
-				if (bIsTwoHanded) {
-					cameraShakeStrength *= Settings::fHitstopCameraShakeTwoHandedMultiplier;
-					cameraShakeLength *= Settings::fHitstopCameraShakeTwoHandedMultiplier;
-				}
-
-				precisionHandler->ApplyCameraShake(cameraShakeStrength, cameraShakeLength, Settings::fHitstopCameraShakeFrequency, 0.f);
-			}
-		}
 	}
 
 	if (targetActor) {
@@ -317,6 +241,8 @@ void PendingHit::Run()
 			precisionHandler->RunPostHitCallbacks(precisionHitData, hitData);
 		}
 	}
+
+	PrecisionHandler::RemoveCachedHitData(cachedHitRefHandle);
 
 	PrecisionHandler::cachedAttackData.Clear();
 

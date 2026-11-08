@@ -27,6 +27,8 @@ namespace Hooks
 
 		FirstPersonStateHook::Hook();
 
+		HitEventHook::Hook();
+
 		logger::trace("...success");
 	}
 
@@ -1259,12 +1261,12 @@ namespace Hooks
 			return;
 		}
 
-		RE::hkbGeneratorOutput::TrackHeader* poseHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::TRACK_POSE);
-		RE::hkbGeneratorOutput::TrackHeader* worldFromModelHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::TRACK_WORLD_FROM_MODEL);
-		RE::hkbGeneratorOutput::TrackHeader* keyframedBonesHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::TRACK_KEYFRAMED_RAGDOLL_BONES);
-		RE::hkbGeneratorOutput::TrackHeader* rigidBodyHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::TRACK_RIGID_BODY_RAGDOLL_CONTROLS);
-		RE::hkbGeneratorOutput::TrackHeader* poweredHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::TRACK_POWERED_RAGDOLL_CONTROLS);
-		RE::hkbGeneratorOutput::TrackHeader* poweredWorldFromModelModeHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::TRACK_POWERED_RAGDOLL_WORLD_FROM_MODEL_MODE);
+		RE::hkbGeneratorOutput::TrackHeader* poseHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::kPose);
+		RE::hkbGeneratorOutput::TrackHeader* worldFromModelHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::kWorldFromModel);
+		RE::hkbGeneratorOutput::TrackHeader* keyframedBonesHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::kKeyframedRagdollBones);
+		RE::hkbGeneratorOutput::TrackHeader* rigidBodyHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::kRigidBodyRagdollControls);
+		RE::hkbGeneratorOutput::TrackHeader* poweredHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::kPoweredRagdollControls);
+		RE::hkbGeneratorOutput::TrackHeader* poweredWorldFromModelModeHeader = GetTrackHeader(a_generatorOutput, RE::hkbGeneratorOutput::StandardTracks::kPoweredRagdollWorldFromModelMode);
 
 		ragdoll->deltaTime = a_deltaTime;
 		ragdoll->elapsedTime += a_deltaTime;
@@ -1283,9 +1285,9 @@ namespace Hooks
 		bool isUsingRootBoneAsWorldFromModel = false;
 		if (poweredWorldFromModelModeHeader && poweredWorldFromModelModeHeader->onFraction > 0.f) {
 			RE::hkbWorldFromModelModeData& worldFromModelMode = *(RE::hkbWorldFromModelModeData*)Track_getData(a_generatorOutput, *poweredWorldFromModelModeHeader);
-			if (worldFromModelMode.mode == RE::hkbWorldFromModelModeData::WorldFromModelMode::WORLD_FROM_MODEL_MODE_COMPUTE) {
+			if (worldFromModelMode.mode == RE::hkbWorldFromModelModeData::WorldFromModelMode::kCompute) {
 				isComputingWorldFromModel = true;
-			} else if (worldFromModelMode.mode == RE::hkbWorldFromModelModeData::WorldFromModelMode::WORLD_FROM_MODEL_MODE_USE_ROOT_BONE) {
+			} else if (worldFromModelMode.mode == RE::hkbWorldFromModelModeData::WorldFromModelMode::kUseRootBone) {
 				isUsingRootBoneAsWorldFromModel = true;
 			}
 		}
@@ -1674,7 +1676,7 @@ namespace Hooks
 			return;
 		}
 
-		RE::hkbGeneratorOutput::TrackHeader* poseHeader = GetTrackHeader(a_generatorInOut, RE::hkbGeneratorOutput::StandardTracks::TRACK_POSE);
+		RE::hkbGeneratorOutput::TrackHeader* poseHeader = GetTrackHeader(a_generatorInOut, RE::hkbGeneratorOutput::StandardTracks::kPose);
 		if (poseHeader && poseHeader->onFraction > 0.f) {
 			int numPoses = poseHeader->numData;
 			RE::hkQsTransform* animPose = (RE::hkQsTransform*)Track_getData(a_generatorInOut, *poseHeader);
@@ -1698,7 +1700,7 @@ namespace Hooks
 			return;
 		}
 
-		RE::hkbGeneratorOutput::TrackHeader* poseHeader = GetTrackHeader(a_generatorInOut, RE::hkbGeneratorOutput::StandardTracks::TRACK_POSE);
+		RE::hkbGeneratorOutput::TrackHeader* poseHeader = GetTrackHeader(a_generatorInOut, RE::hkbGeneratorOutput::StandardTracks::kPose);
 
 		if (poseHeader && poseHeader->onFraction > 0.f) {
 			int numPoses = poseHeader->numData;
@@ -1708,7 +1710,7 @@ namespace Hooks
 			ragdoll->ragdollPose.assign(poseOut, poseOut + numPoses);
 		}
 
-		RE::hkbGeneratorOutput::TrackHeader* worldFromModelHeader = GetTrackHeader(a_generatorInOut, RE::hkbGeneratorOutput::StandardTracks::TRACK_WORLD_FROM_MODEL);
+		RE::hkbGeneratorOutput::TrackHeader* worldFromModelHeader = GetTrackHeader(a_generatorInOut, RE::hkbGeneratorOutput::StandardTracks::kWorldFromModel);
 		if (worldFromModelHeader && worldFromModelHeader->onFraction > 0.f) {
 			RE::hkQsTransform& worldFromModel = *(RE::hkQsTransform*)Track_getData(a_generatorInOut, *worldFromModelHeader);
 			ragdoll->worldFromModelPostPhysics = worldFromModel;
@@ -2000,7 +2002,7 @@ namespace Hooks
 												// fix invalid motion type after cloning
 												Utils::TraverseAllScenegraphCollisions(clone.get(), [&](auto&& a_collisionObject) -> RE::BSVisit::BSVisitControl {
 													if (auto blendCollisionObject = skyrim_cast<RE::bhkBlendCollisionObject*>(a_collisionObject)) {
-														blendCollisionObject->motionType = RE::hkpMotion::MotionType::kKeyframed;
+														blendCollisionObject->motionType = static_cast<std::uint32_t>(RE::hkpMotion::MotionType::kKeyframed);
 													}
 													return RE::BSVisit::BSVisitControl::kContinue;
 												});
@@ -2149,6 +2151,101 @@ namespace Hooks
 		}
 
 		return _GetUnarmedReach(a_actor);
+	}
+
+	void HitEventHook::Hooks::ProcessHitEvent::thunk(RE::Actor* a_target, RE::HitData* a_hitData)
+	{
+		func(a_target, a_hitData);
+
+		if (!a_target || !a_hitData || !a_hitData->attackData)
+			return;
+
+		auto attackerHandle = a_hitData->aggressor;
+		auto attacker = attackerHandle ? attackerHandle.get() : nullptr;
+		if (!attacker || !PrecisionHandler::IsActorActive(attackerHandle))
+			return;
+
+		if (Settings::bEnableHitstop || (Settings::bEnableHitstopCameraShake && attacker->IsPlayerRef())) {
+			auto precisionHandler = PrecisionHandler::GetSingleton();
+			//uint32_t hitCount = targetActor ? attackCollision->GetHitNPCCount() : attackCollision->GetHitCount();
+			uint32_t hitCount = a_target ? precisionHandler->GetHitNPCCount(attackerHandle) : precisionHandler->GetHitCount(attackerHandle);
+
+			bool bIsActorAlive = a_target ? !a_target->IsDead() : false;
+			bool bIsPowerAttack = false;
+			bool bIsTwoHanded = false;
+			bool bIsBlockedHit = a_hitData->flags.any(RE::HitData::Flag::kBlocked);
+
+			auto& attackData = attacker->GetActorRuntimeData().currentProcess->high->attackData;
+			if (attackData && attackData->data.flags.any(RE::AttackData::AttackFlag::kPowerAttack)) {
+				bIsPowerAttack = true;
+			}
+
+			if (auto attackingObject = attacker->GetAttackingWeapon()) {
+				if (auto attackingWeapon = attackingObject->object->As<RE::TESObjectWEAP>()) {
+					if (attackingWeapon->GetWeaponType() == RE::WEAPON_TYPE::kTwoHandAxe || attackingWeapon->GetWeaponType() == RE::WEAPON_TYPE::kTwoHandSword) {
+						bIsTwoHanded = true;
+					}
+				}
+			}
+
+			if (Settings::bEnableHitstop && (attacker->IsPlayerRef() || Settings::bEnableNPCHitStop)) {
+				float diminishingReturnsMultiplier = pow(Settings::fHitstopDurationDiminishingReturnsFactor, hitCount - 1);
+
+				float hitstopLength = (bIsActorAlive ? Settings::fHitstopDurationNPC : Settings::fHitstopDurationOther) * diminishingReturnsMultiplier;
+
+				if (bIsPowerAttack) {
+					hitstopLength *= Settings::fHitstopDurationPowerAttackMultiplier;
+				}
+
+				if (bIsTwoHanded) {
+					hitstopLength *= Settings::fHitstopDurationTwoHandedMultiplier;
+				}
+
+				if (bIsBlockedHit) {
+					hitstopLength *= Settings::fHitstopDurationBlockedHitMultiplier;
+				}
+
+				PrecisionHandler::AddHitstop(attackerHandle, hitstopLength, false);
+				if (Settings::bApplyHitstopToTarget && a_target) {
+					// don't apply to the player in first person because it feels weird
+					bool bIsPlayer = a_target->IsPlayerRef();
+					bool bIsFirstPerson = bIsPlayer && Utils::IsFirstPerson();
+
+					if (!bIsFirstPerson) {
+						PrecisionHandler::AddHitstop(a_target->GetHandle(), hitstopLength, true);
+					}
+				}
+			}
+
+			if (Settings::bEnableHitstopCameraShake && attacker->IsPlayerRef()) {
+				/*RE::NiPoint3 niHitPos = Utils::HkVectorToNiPoint(hkHitPos) * *g_worldScaleInverse;
+			ApplyCameraShake(targetActor ? Settings::fHitstopCameraShakeStrengthNPC : Settings::fHitstopCameraShakeStrengthOther, niHitPos, Settings::fHitstopCameraShakeLength);*/
+
+				//*g_currentCameraShakeStrength = targetActor ? Settings::fHitstopCameraShakeStrengthNPC : Settings::fHitstopCameraShakeStrengthOther;
+
+				float diminishingReturnsMultiplier = pow(Settings::fHitstopCameraShakeDurationDiminishingReturnsFactor, hitCount - 1);
+
+				float cameraShakeLength = (bIsActorAlive ? Settings::fHitstopCameraShakeDurationNPC : Settings::fHitstopCameraShakeDurationOther) * diminishingReturnsMultiplier;
+				float cameraShakeStrength = (bIsActorAlive ? Settings::fHitstopCameraShakeStrengthNPC : Settings::fHitstopCameraShakeStrengthOther) * diminishingReturnsMultiplier;
+
+				if (bIsPowerAttack) {
+					cameraShakeStrength *= Settings::fHitstopCameraShakePowerAttackMultiplier;
+					cameraShakeLength *= Settings::fHitstopCameraShakePowerAttackMultiplier;
+				}
+
+				if (bIsTwoHanded) {
+					cameraShakeStrength *= Settings::fHitstopCameraShakeTwoHandedMultiplier;
+					cameraShakeLength *= Settings::fHitstopCameraShakeTwoHandedMultiplier;
+				}
+
+				if (bIsBlockedHit) {
+					cameraShakeStrength *= Settings::fHitstopCameraShakeBlockedHitMultiplier;
+					cameraShakeLength *= Settings::fHitstopCameraShakeBlockedHitMultiplier;
+				}
+
+				precisionHandler->ApplyCameraShake(cameraShakeStrength, cameraShakeLength, Settings::fHitstopCameraShakeFrequency, 0.f);
+			}
+		}
 	}
 
 }

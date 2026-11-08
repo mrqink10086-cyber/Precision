@@ -80,12 +80,30 @@ target_include_directories(
 )
 
 set(SKSE_SUPPORT_XBYAK ON)
+set(COMMONLIBSSE_NG_PATH "$ENV{CommonLibSSEPath}" CACHE PATH "CommonLibSSE-NG source directory")
+if(NOT COMMONLIBSSE_NG_PATH)
+	set(COMMONLIBSSE_NG_PATH "${ROOT_DIR}/../CommonLibSSE-NG-ng")
+endif()
+add_subdirectory("${COMMONLIBSSE_NG_PATH}" CommonLibSSE EXCLUDE_FROM_ALL)
 
-add_subdirectory("$ENV{CommonLibSSEPath}" CommonLibSSE EXCLUDE_FROM_ALL)
+include(FetchContent)
+if(EXISTS "${ROOT_DIR}/extern/glm/CMakeLists.txt")
+	add_subdirectory("${ROOT_DIR}/extern/glm" glm)
+else()
+	FetchContent_Declare(glm
+		GIT_REPOSITORY https://github.com/g-truc/glm.git
+		GIT_TAG 586a402397dd35d66d7a079049856d1e2cbab300)
+	FetchContent_MakeAvailable(glm)
+endif()
 
-add_subdirectory("${ROOT_DIR}/extern/glm" glm)
-
-find_package(tomlplusplus REQUIRED CONFIG)
+find_package(tomlplusplus CONFIG QUIET)
+if(NOT TARGET tomlplusplus::tomlplusplus)
+	FetchContent_Declare(tomlplusplus
+		GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+		GIT_TAG v3.4.0
+		GIT_SHALLOW TRUE)
+	FetchContent_MakeAvailable(tomlplusplus)
+endif()
 find_package(xbyak REQUIRED CONFIG)
 
 target_link_libraries(

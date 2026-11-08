@@ -14,7 +14,8 @@ namespace PRECISION_API
 		V1,
 		V2,
 		V3,
-		V4
+		V4,
+		V5,
 	};
 
 	// Error types that may be returned by Precision
@@ -89,6 +90,7 @@ namespace PRECISION_API
 
 	struct PrecisionHitData
 	{
+		constexpr PrecisionHitData() = default;
 		PrecisionHitData(RE::Actor* a_attacker, RE::TESObjectREFR* a_target, RE::hkpRigidBody* a_hitRigidBody, RE::hkpRigidBody* a_hittingRigidBody, const RE::NiPoint3& a_hitPos,
 			const RE::NiPoint3& a_separatingNormal, const RE::NiPoint3& a_hitPointVelocity, RE::hkpShapeKey a_hitBodyShapeKey, RE::hkpShapeKey a_hittingBodyShapeKey) :
 			attacker(a_attacker),
@@ -365,6 +367,40 @@ namespace PRECISION_API
 		virtual void ApplyHitImpulse2(RE::ActorHandle a_targetActorHandle, RE::ActorHandle a_sourceActorHandle, RE::hkpRigidBody* a_rigidBody, const RE::NiPoint3& a_hitVelocity, const RE::hkVector4& a_hitPosition, float a_impulseMult) noexcept = 0;
 	};
 
+	class IVPrecision5 : public IVPrecision4
+	{
+	public:
+		/// <summary>
+		/// Registers an owned copy of a custom annotation key for the per-hit extra-data cache.
+		/// </summary>
+		/// <param name="a_name">Name of your custom parameter key</param>
+		/// <returns>OK, NotRegistered</returns>
+		virtual APIResult AddExtraParameterName(const char* a_name) noexcept = 0;
+
+		/// <summary>
+		/// Get cached PrecisionHitData from target actor.
+		/// </summary>
+		/// <param name="a_refHandle">Target actor handle</param>
+		/// <returns>Thread-local snapshot, valid until the next successful GetCachedHitData call on this thread or thread exit; or nullptr. Game-object pointers remain borrowed.</returns>
+		virtual PrecisionHitData* GetCachedHitData(RE::ObjectRefHandle a_refHandle) noexcept = 0;
+
+		/// <summary>
+		/// Get key-value from cached extra data map of target actor.
+		/// </summary>
+		/// <param name="a_refHandle">Target actor handle</param>
+		/// <param name="a_key">String key</param>
+		/// <returns>Thread-local string, valid until the next successful GetCachedExtraData call on this thread or thread exit; or nullptr.</returns>
+		virtual const char* GetCachedExtraData(RE::ObjectRefHandle a_refHandle, const char* a_key) noexcept = 0;
+
+		/// <summary>
+		/// Get key-value from cached extra data map of corresponding PrecisionHitData.
+		/// </summary>
+		/// <param name="a_hitData">Pointer of PrecisionHitData that's valid</param>
+		/// <param name="a_key">String key</param>
+		/// <returns>Thread-local string with the same lifetime as the handle overload; or nullptr.</returns>
+		virtual const char* GetCachedExtraData(PrecisionHitData* a_hitData, const char* a_key) noexcept = 0;
+	};
+
 	typedef void* (*_RequestPluginAPI)(const InterfaceVersion interfaceVersion);
 
 	/// <summary>
@@ -373,7 +409,7 @@ namespace PRECISION_API
 	/// </summary>
 	/// <param name="a_interfaceVersion">The interface version to request</param>
 	/// <returns>The pointer to the API singleton, or nullptr if request failed</returns>
-	[[nodiscard]] inline void* RequestPluginAPI(const InterfaceVersion a_interfaceVersion = InterfaceVersion::V4)
+	[[nodiscard]] inline void* RequestPluginAPI(const InterfaceVersion a_interfaceVersion = InterfaceVersion::V5)
 	{
 		auto pluginHandle = REX::W32::GetModuleHandle("Precision.dll");
 		_RequestPluginAPI requestAPIFunction = (_RequestPluginAPI)REX::W32::GetProcAddress(pluginHandle, "RequestPluginAPI");

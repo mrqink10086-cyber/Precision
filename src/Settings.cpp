@@ -642,12 +642,14 @@ void Settings::ReadSettings()
 
 		// Hitstop
 		ReadBoolSetting(mcm, "Hitstop", "bEnableHitstop", bEnableHitstop);
+		ReadBoolSetting(mcm, "Hitstop", "bEnableNPCHitStop", bEnableNPCHitStop);
 		ReadBoolSetting(mcm, "Hitstop", "bApplyHitstopToTarget", bApplyHitstopToTarget);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopDurationNPC", fHitstopDurationNPC);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopDurationOther", fHitstopDurationOther);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopSlowdownTimeMultiplier", fHitstopSlowdownTimeMultiplier);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopDurationPowerAttackMultiplier", fHitstopDurationPowerAttackMultiplier);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopDurationTwoHandedMultiplier", fHitstopDurationTwoHandedMultiplier);
+		ReadFloatSetting(mcm, "Hitstop", "fHitstopDurationBlockedHitMultiplier", fHitstopDurationBlockedHitMultiplier);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopDurationDiminishingReturnsFactor", fHitstopDurationDiminishingReturnsFactor);
 
 		ReadBoolSetting(mcm, "Hitstop", "bEnableHitstopCameraShake", bEnableHitstopCameraShake);
@@ -658,6 +660,7 @@ void Settings::ReadSettings()
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopCameraShakeFrequency", fHitstopCameraShakeFrequency);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopCameraShakePowerAttackMultiplier", fHitstopCameraShakePowerAttackMultiplier);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopCameraShakeTwoHandedMultiplier", fHitstopCameraShakeTwoHandedMultiplier);
+		ReadFloatSetting(mcm, "Hitstop", "fHitstopCameraShakeBlockedHitMultiplier", fHitstopCameraShakeBlockedHitMultiplier);
 		ReadFloatSetting(mcm, "Hitstop", "fHitstopCameraShakeDurationDiminishingReturnsFactor", fHitstopCameraShakeDurationDiminishingReturnsFactor);
 
 		// Recoil

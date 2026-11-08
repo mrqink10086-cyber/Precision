@@ -347,6 +347,41 @@ namespace Hooks
 		static inline REL::Relocation<decltype(bhkCollisionFilter_CompareFilterInfo7)> _bhkCollisionFilter_CompareFilterInfo7;
 	};
 
+	class HitEventHook
+	{
+	public:
+		static void Hook()
+		{
+			Hooks::Install();
+		}
+
+	protected:
+		struct Hooks
+		{
+			struct ProcessHitEvent
+			{
+				static void thunk(RE::Actor* a_target, RE::HitData* a_hitData);
+
+				static inline REL::Relocation<decltype(thunk)> func;
+			};
+
+			static void Install()
+			{
+				stl::write_thunk_call<ProcessHitEvent>(REL::RelocationID(37673, 38627).address() + REL::Relocate(0x3C0, 0x4A8, 0x3C0));  // 1.5.97 140628C20
+			}
+		};
+
+	private:
+		constexpr HitEventHook() noexcept = default;
+		HitEventHook(const HitEventHook&) = delete;
+		HitEventHook(HitEventHook&&) = delete;
+
+		~HitEventHook() = default;
+
+		HitEventHook& operator=(const HitEventHook&) = delete;
+		HitEventHook& operator=(HitEventHook&&) = delete;
+	};
+
 	bool ActorHasAttackCollision(const RE::ActorHandle a_actorHandle);
 
 	void Install();

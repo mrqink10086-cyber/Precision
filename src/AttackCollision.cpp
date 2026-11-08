@@ -83,6 +83,7 @@ AttackCollision::AttackCollision(RE::ActorHandle a_actorHandle, const CollisionD
 					bNoRecoil = a_collisionDefinition.bNoRecoil;
 					damageMult = a_collisionDefinition.damageMult;
 					groundShake = a_collisionDefinition.groundShake;
+					extraDataMap = a_collisionDefinition.extraDataMap;
 
 					lifetime = a_collisionDefinition.duration;
 					if (a_collisionDefinition.duration) {
@@ -597,8 +598,18 @@ bool AttackCollision::CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor,
 
 	auto capsuleShape = static_cast<RE::hkpCapsuleShape*>(weaponShape->referencedObject.get());
 
-	RE::bhkRigidBodyCinfo cInfo;
+	alignas(16) RE::bhkRigidBodyCinfo cInfo;
 	bhkRigidBodyCinfo_ctor(&cInfo);
+	RE::hkpRigidBodyCinfo hkCinfo{};
+	static_assert(sizeof(hkCinfo) == sizeof(cInfo.hkCinfo));
+	static_assert(offsetof(RE::hkpRigidBodyCinfo, collisionFilterInfo) == 0x00 &&
+				  offsetof(RE::hkpRigidBodyCinfo, shape) == 0x08 &&
+				  offsetof(RE::hkpRigidBodyCinfo, position) == 0x20 &&
+				  offsetof(RE::hkpRigidBodyCinfo, rotation) == 0x30 &&
+				  offsetof(RE::hkpRigidBodyCinfo, motionType) == 0xCC &&
+				  offsetof(RE::hkpRigidBodyCinfo, enableDeactivation) == 0xCD &&
+				  offsetof(RE::hkpRigidBodyCinfo, solverDeactivation) == 0xCE &&
+				  offsetof(RE::hkpRigidBodyCinfo, qualityType) == 0xCF);
 
 	RE::CFilter collisionFilterInfo{};
 
@@ -609,18 +620,29 @@ bool AttackCollision::CreateCollision(RE::bhkWorld* a_world, RE::Actor* a_actor,
 	uint16_t collisionGroup = collisionFilterInfo.filter >> 16;
 
 	cInfo.collisionFilterInfo = (uint32_t)collisionGroup << 16 | static_cast<uint32_t>(a_collisionLayer);
-	cInfo.hkCinfo.collisionFilterInfo = (uint32_t)collisionGroup << 16 | static_cast<uint32_t>(a_collisionLayer);
+	hkCinfo.collisionFilterInfo = (uint32_t)collisionGroup << 16 | static_cast<uint32_t>(a_collisionLayer);
 	cInfo.shape = capsuleShape;
-	cInfo.hkCinfo.shape = capsuleShape;
-	cInfo.hkCinfo.motionType = RE::hkpMotion::MotionType::kKeyframed;
-	cInfo.hkCinfo.enableDeactivation = false;
-	cInfo.hkCinfo.solverDeactivation = RE::hkpRigidBodyCinfo::SolverDeactivation::kOff;
-	cInfo.hkCinfo.qualityType = RE::hkpCollidableQualityType::kKeyframedReporting;
+	hkCinfo.shape = capsuleShape;
+	hkCinfo.motionType = RE::hkpMotion::MotionType::kKeyframed;
+	hkCinfo.enableDeactivation = false;
+	hkCinfo.solverDeactivation = RE::hkpRigidBodyCinfo::SolverDeactivation::kOff;
+	hkCinfo.qualityType = RE::hkpCollidableQualityType::kKeyframedReporting;
 
 	// set transform
 	RE::hkTransform transform = Utils::GetHkTransformOfNode(a_parentNode);
-	cInfo.hkCinfo.position = transform.translation;
-	cInfo.hkCinfo.rotation = Utils::SetFromRotation(transform.rotation);
+	hkCinfo.position = transform.translation;
+	hkCinfo.rotation = Utils::SetFromRotation(transform.rotation);
+	const auto copyField = [&](std::size_t a_offset, const auto& a_value) {
+		std::memcpy(cInfo.hkCinfo + a_offset, std::addressof(a_value), sizeof(a_value));
+	};
+	copyField(offsetof(RE::hkpRigidBodyCinfo, collisionFilterInfo), hkCinfo.collisionFilterInfo);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, shape), hkCinfo.shape);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, motionType), hkCinfo.motionType);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, enableDeactivation), hkCinfo.enableDeactivation);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, solverDeactivation), hkCinfo.solverDeactivation);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, qualityType), hkCinfo.qualityType);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, position), hkCinfo.position);
+	copyField(offsetof(RE::hkpRigidBodyCinfo, rotation), hkCinfo.rotation);
 
 	RE::bhkRigidBody* rigidBody = reinterpret_cast<RE::bhkRigidBody*>(RE::MemoryManager::GetSingleton()->Allocate(sizeof(RE::bhkRigidBody), 0, false));
 	if (!rigidBody) {
