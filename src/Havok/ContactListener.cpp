@@ -348,10 +348,9 @@ void ContactListener::ContactPointCallback(const RE::hkpContactPointEvent& a_eve
 		}
 	}
 
-	auto targetActorHandle = targetActor->GetHandle();
-
 	// while in combat, filter out actors like teammates etc.
 	if (targetActor && attackerActor && precisionHandler->CheckActorInCombat(attackerHandle)) {
+		auto targetActorHandle = targetActor->GetHandle();
 		// don't let player hit their teammates or summons
 		bool bAttackerIsPlayer = attackerActor->IsPlayerRef();
 		bool bTargetIsPlayer = targetActor->IsPlayerRef();

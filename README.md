@@ -1,6 +1,6 @@
-## Precision 2.0.6 + max-su V5
+## Precision 2.0.7 + max-su V5
 
-本地合并版：保留标准 2.0.6 修复和 V1–V4 API，合入影天分支的 V5、自定义命中载荷及 hitstop 重做。使用 CommonLibSSE-NG 15.7.3 构建，同一 DLL 保留 Skyrim SE 1.5.97 和 AE 1.6.1170；MSL 1.2.2 可直接请求 V5。
+本地合并版：以标准 2.0.6 为基础，保留其修复和 V1–V4 API，合入影天分支的 V5、自定义命中载荷及 hitstop 重做。使用 CommonLibSSE-NG 15.7.3 构建，同一 DLL 保留 Skyrim SE 1.5.97 和 AE 1.6.1170；MSL 1.2.2 可直接请求 V5。
 
 安装时只覆盖原 Precision 的 DLL，保留原模组资源，并使用对应游戏版本的 SKSE 与 Address Library。合并细节和构建方式见 [docs/MERGE.md](docs/MERGE.md)；调度、回调、游戏指针与配置修复及验证范围见 [docs/SAFETY-FIXES.md](docs/SAFETY-FIXES.md)。尚未进行游戏内测试。
 
