@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 
 project(
 	Precision
-	VERSION 2.0.7
+	VERSION 2.0.8
 	LANGUAGES CXX
 )
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -72,6 +72,13 @@ if(PRECISION_BUILD_TESTS)
 	target_include_directories(precision_camera_filter_tests PRIVATE src)
 	add_test(NAME precision_camera_filter_tests COMMAND precision_camera_filter_tests)
 	set_tests_properties(precision_camera_filter_tests PROPERTIES TIMEOUT 30)
+
+	add_executable(precision_model_bounds_tests tests/model_bounds_tests.cpp)
+	target_compile_features(precision_model_bounds_tests PRIVATE cxx_std_20)
+	target_include_directories(precision_model_bounds_tests PRIVATE src)
+	target_link_libraries(precision_model_bounds_tests PRIVATE CommonLibSSE::CommonLibSSE)
+	add_test(NAME precision_model_bounds_tests COMMAND precision_model_bounds_tests)
+	set_tests_properties(precision_model_bounds_tests PROPERTIES TIMEOUT 30)
 
 	add_executable(precision_runtime_bench EXCLUDE_FROM_ALL tests/runtime_bench.cpp)
 	target_compile_features(precision_runtime_bench PRIVATE cxx_std_20)

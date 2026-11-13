@@ -1,5 +1,6 @@
 #include "Utils.h"
 #include "Havok/Havok.h"
+#include "ModelBounds.h"
 #include "Offsets.h"
 #include "PrecisionHandler.h"
 #include "render/DrawHandler.h"
@@ -792,14 +793,8 @@ namespace Utils
 		bool bInitial = true;
 
 		RE::NiTransform transform{};
-		TraverseMeshes(a_obj, true, transform, [&](auto&& a_geometry, const RE::NiTransform& a_transform) {
-			RE::NiBound modelBound = a_geometry->modelBound;
-
-			modelBound.center = a_geometry->local * modelBound.center;
-			modelBound.radius *= a_geometry->local.scale;
-
-			modelBound.center = a_transform * modelBound.center;
-			modelBound.radius *= a_transform.scale;
+		auto collectBound = [&](auto&& a_geometry, const RE::NiTransform& a_transform) {
+			RE::NiBound modelBound = ModelBounds::Transform(a_geometry->modelBound, a_geometry->local, a_transform);
 
 			if (bInitial) {
 				ret = modelBound;
@@ -807,28 +802,12 @@ namespace Utils
 			} else {
 				NiBound_Combine(ret, modelBound);
 			}
-		});
+		};
+		TraverseMeshes(a_obj, true, transform, collectBound);
 
 		if (ret.radius == 0.f) {
 			// try less strict
-			TraverseMeshes(a_obj, false, transform, [&](auto&& a_geometry, const RE::NiTransform& a_transform) {
-				RE::NiBound modelBound = a_geometry->modelBound;
-
-				modelBound.center *= a_geometry->local.scale;
-				modelBound.radius *= a_geometry->local.scale;
-
-				modelBound.center += a_geometry->local.translate;
-
-				modelBound.center = a_transform * modelBound.center;
-				modelBound.radius *= a_transform.scale;
-
-				if (bInitial) {
-					ret = modelBound;
-					bInitial = false;
-				} else {
-					NiBound_Combine(ret, modelBound);
-				}
-			});
+			TraverseMeshes(a_obj, false, transform, collectBound);
 		}
 
 		return ret;
